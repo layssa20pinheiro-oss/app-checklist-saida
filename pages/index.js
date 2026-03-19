@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import html2canvas from 'html2canvas';
-import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2 } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2, Globe, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 
 const supabase = createClient(
   'https://rticfwqptlxkpgawpzwf.supabase.co',
