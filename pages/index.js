@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import html2canvas from 'html2canvas';
-import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2, Globe, ExternalLink } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
 const supabase = createClient(
@@ -24,16 +24,14 @@ export default function ChecklistApp() {
   const areaCapturaRef = useRef();
 
   useEffect(() => {
-    // Define a URL base apenas quando estiver no navegador
     if (typeof window !== 'undefined') {
       setBaseUrl(window.location.origin);
-      
       const params = new URLSearchParams(window.location.search);
       const id = params.get('id');
       if (id) {
-        const buscarRelatorio = async (idRelatorio) => {
+        const buscarRelatorio = async (idRel) => {
           setLoading(true);
-          const { data } = await supabase.from('checklists').select('*').eq('id', idRelatorio).single();
+          const { data } = await supabase.from('checklists').select('*').eq('id', idRel).single();
           if (data) {
             setForm(data);
             setItens(data.itens || []);
@@ -127,14 +125,12 @@ export default function ChecklistApp() {
 
 ✨ *Seu Relatório Digital:* ${linkDigital}
 
-🖼️ *Imagem para download:* ${imgGeradaUrl}
-
 Foi um prazer fazer parte desse sonho.`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_top');
   };
 
-  if (loading && etapa === 'view') return <div className="min-h-screen bg-[#7e7f7f] flex items-center justify-center text-white italic">Carregando...</div>;
+  if (loading && etapa === 'view') return <div className="min-h-screen bg-[#7e7f7f] flex items-center justify-center text-white italic">Carregando Relatório...</div>;
 
   const linkDigitalFinal = `${baseUrl}/?id=${reportId}`;
 
@@ -143,9 +139,18 @@ Foi um prazer fazer parte desse sonho.`;
       
       {etapa === 'form' && (
         <div className="w-full max-w-md">
+          
+          {/* BOTÃO PARA O HISTÓRICO */}
+          <div className="flex justify-end mb-2">
+            <Link href="/historico" className="text-white/60 text-[10px] font-bold flex items-center gap-1 hover:text-white transition uppercase tracking-tighter">
+               Ver Histórico <ExternalLink size={12} />
+            </Link>
+          </div>
+
           <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mx-auto mb-6" alt="Logo" />
+          
           <div className="bg-white rounded-[30px] p-8 shadow-xl">
-            <h2 className="text-center font-bold text-gray-500 mb-6 uppercase">Novo Checklist</h2>
+            <h2 className="text-center font-bold text-gray-500 mb-6 uppercase tracking-widest text-sm">Novo Checklist</h2>
             <div className="space-y-4">
               <input className="w-full border-b p-2 outline-none" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
               <input className="w-full border-b p-2 outline-none" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
@@ -154,14 +159,14 @@ Foi um prazer fazer parte desse sonho.`;
                 <input type="number" className="w-full border-b p-2 outline-none" placeholder="Convidados" value={form.convidados} onChange={e=>setForm({...form, convidados: e.target.value})} />
               </div>
               <div className="flex gap-2">
-                <input className="flex-1 bg-gray-50 rounded-lg px-3" placeholder="Item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} />
+                <input className="flex-1 bg-gray-50 rounded-lg px-3" placeholder="Adicionar item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} />
                 <button onClick={handleAddItem} className="bg-[#ded0b8] p-2 rounded-lg text-white"><Plus /></button>
               </div>
               <ul className="text-sm space-y-1">
                 {itens.map((it, i) => <li key={i} className="bg-gray-50 p-2 rounded flex justify-between tracking-tight"> • {it} <Trash2 size={14} onClick={()=>setItens(itens.filter((_,idx)=>idx!==i))} className="text-red-300"/></li>)}
               </ul>
               <textarea className="w-full border rounded-lg p-2 text-sm" placeholder="Observações..." value={form.obs} onChange={e=>setForm({...form, obs: e.target.value})}></textarea>
-              <input className="w-full border-b p-2 outline-none" placeholder="Seu Nome" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
+              <input className="w-full border-b p-2 outline-none" placeholder="Seu Nome (Responsável)" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
               <label className="flex flex-col items-center justify-center border-2 border-dashed border-[#ded0b8] rounded-2xl p-4 cursor-pointer">
                 <Camera className="text-gray-400 mb-1" />
                 <span className="text-[10px] font-bold text-gray-400 uppercase">Foto dos Itens</span>
@@ -200,7 +205,7 @@ Foi um prazer fazer parte desse sonho.`;
             <div className="mt-8 flex gap-3 w-full max-w-md pb-10 px-4">
               <button onClick={() => setEtapa('form')} className="flex-1 bg-white text-gray-500 font-bold py-4 rounded-2xl shadow-md border flex items-center justify-center gap-2"><Edit3 size={16}/> Ajustar</button>
               <button onClick={salvarTudo} disabled={loading} className="flex-2 bg-[#8da38d] text-white font-bold py-4 px-8 rounded-2xl shadow-md flex items-center justify-center gap-2">
-                {loading ? <Loader2 className="animate-spin" /> : "Confirmar"}
+                {loading ? <Loader2 className="animate-spin" /> : "Confirmar e Salvar"}
               </button>
             </div>
           )}
@@ -210,12 +215,12 @@ Foi um prazer fazer parte desse sonho.`;
       {etapa === 'sucesso' && (
         <div className="w-full max-w-md bg-white rounded-[30px] p-10 shadow-2xl text-center mt-10">
           <div className="text-5xl mb-4">✨</div>
-          <h2 className="text-gray-500 text-xl font-bold mb-6">Concluído!</h2>
+          <h2 className="text-gray-500 text-xl font-bold mb-6">Relatório Gerado!</h2>
           <div className="space-y-4">
-            <button onClick={shareWhatsApp} className="w-full bg-[#25D366] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md"><Send size={18}/> WHATSAPP</button>
-            <a href={linkDigitalFinal} target="_blank" rel="noreferrer" className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-center shadow-md">RELATÓRIO DIGITAL</a>
-            <a href={imgGeradaUrl} target="_blank" rel="noreferrer" className="w-full bg-gray-400 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-center shadow-md"><ImageIcon size={18}/> BAIXAR IMAGEM</a>
-            <button onClick={() => window.location.reload()} className="w-full text-gray-400 font-bold py-4 tracking-tighter">NOVO CHECKLIST</button>
+            <button onClick={shareWhatsApp} className="w-full bg-[#25D366] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md"><Send size={18}/> MANDAR NO WHATSAPP</button>
+            <a href={linkDigitalFinal} target="_blank" rel="noreferrer" className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-center shadow-md">ABRIR LINK DIGITAL</a>
+            <a href={imgGeradaUrl} target="_blank" rel="noreferrer" className="w-full bg-gray-400 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-center shadow-md"><ImageIcon size={18}/> VER IMAGEM</a>
+            <button onClick={() => window.location.reload()} className="w-full text-gray-400 font-bold py-4 tracking-tighter">FAZER NOVO</button>
           </div>
         </div>
       )}
