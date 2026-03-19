@@ -139,8 +139,6 @@ Foi um prazer fazer parte desse sonho.`;
       
       {etapa === 'form' && (
         <div className="w-full max-w-md">
-          
-          {/* BOTÃO PARA O HISTÓRICO */}
           <div className="flex justify-end mb-2">
             <Link href="/historico" className="text-white/60 text-[10px] font-bold flex items-center gap-1 hover:text-white transition uppercase tracking-tighter">
                Ver Histórico <ExternalLink size={12} />
@@ -184,7 +182,7 @@ Foi um prazer fazer parte desse sonho.`;
           <div ref={areaCapturaRef} className="w-[400px] bg-[#7e7f7f] p-6 flex flex-col items-center">
             <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[130px] mb-6" alt="Logo" />
             <div className="w-full bg-white rounded-[25px] p-8 shadow-sm">
-              <h2 className="text-[#7e7f7f] text-center font-bold text-lg mb-6 uppercase tracking-widest">Relatório de Saída</h2>
+              <h2 className="text-[#7e7f7f] text-center font-bold text-lg mb-6 uppercase tracking-widest">Relatório</h2>
               <div className="space-y-3 text-xs text-gray-700">
                 <p><strong>EVENTO:</strong> {form.evento}</p>
                 <p><strong>LOCAL:</strong> {form.local}</p>
