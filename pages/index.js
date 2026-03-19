@@ -122,7 +122,14 @@ export default function ChecklistApp() {
 
   const shareWhatsApp = () => {
     const linkDigital = `${baseUrl}/?id=${reportId}`;
-    const texto = `*Checklist Cerimonial*\n\n✨ *Relatório Digital:* ${linkDigital}\n\n🖼️ *Imagem:* ${imgGeradaUrl}`;
+    const texto = `Olá! Finalizamos a organização e conferência dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe. Aqui está o resumo de tudo o que guardamos:
+
+✨ *Seu Relatório Digital:* ${linkDigital}
+
+🖼️ *Imagem para download:* ${imgGeradaUrl}
+
+Foi um prazer fazer parte desse sonho.`;
+
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_top');
   };
 
