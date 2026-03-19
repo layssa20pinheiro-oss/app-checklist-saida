@@ -1,28 +1,46 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import html2canvas from 'html2canvas';
-import jsPDF from 'jsPDF';
-import { Camera, Plus, Trash2, Send, FileDown, Edit3, Loader2 } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2, Globe } from 'lucide-react';
 
 const supabase = createClient(
   'https://rticfwqptlxkpgawpzwf.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0aWNmd3FwdGx4a3BnYXdwendmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NDA2MTEsImV4cCI6MjA4OTQxNjYxMX0.vOmi-rKKxXuZ5SP7uZe81Cr0fKW_fWN4Hmuf90soijM'
 );
 
-export default function ChecklistApp() {
-  const [etapa, setEtapa] = useState('form'); 
+export default function App() {
+  const [etapa, setEtapa] = useState('form'); // form, resumo, sucesso, view
   const [loading, setLoading] = useState(false);
   const [itens, setItens] = useState([]);
   const [novoItem, setNovoItem] = useState('');
   const [fotoBlob, setFotoBlob] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState('');
-  
-  const [form, setForm] = useState({
-    evento: '', local: '', presentes: '', convidados: '', obs: '', responsavel: ''
-  });
+  const [imgGeradaUrl, setImgGeradaUrl] = useState('');
+  const [reportId, setReportId] = useState('');
+  const [form, setForm] = useState({ evento: '', local: '', presentes: '', convidados: '', obs: '', responsavel: '' });
 
-  const pdfRef = useRef();
+  const areaCapturaRef = useRef();
+
+  // Detecta se estamos tentando ver um relatório específico pelo link
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) {
+      buscarRelatorio(id);
+    }
+  }, []);
+
+  const buscarRelatorio = async (id) => {
+    setLoading(true);
+    const { data, error } = await supabase.from('checklists').select('*').eq('id', id).single();
+    if (data) {
+      setForm(data);
+      setItens(data.itens || []);
+      setFotoPreview(data.foto_url);
+      setEtapa('view');
+    }
+    setLoading(false);
+  };
 
   const handleAddItem = () => {
     if (novoItem.trim()) {
@@ -34,22 +52,20 @@ export default function ChecklistApp() {
   const handleFotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Otimização: Reduzir a imagem antes de processar
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800; // Tamanho ideal para web/PDF
-          const scaleSize = MAX_WIDTH / img.width;
+          const MAX_WIDTH = 800;
+          const scale = MAX_WIDTH / img.width;
           canvas.width = MAX_WIDTH;
-          canvas.height = img.height * scaleSize;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.height = img.height * scale;
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
           canvas.toBlob((blob) => {
             setFotoBlob(blob);
             setFotoPreview(URL.createObjectURL(blob));
-          }, 'image/jpeg', 0.7);
+          }, 'image/jpeg', 0.8);
         };
         img.src = event.target.result;
       };
@@ -57,59 +73,37 @@ export default function ChecklistApp() {
     }
   };
 
-  const gerarPDF = async () => {
-    const element = pdfRef.current;
-    // Forçar largura de folha A4 para o print não sair cortado
-    const canvas = await html2canvas(element, { 
-      scale: 2, 
-      useCORS: true, 
-      logging: false,
-      windowWidth: 600 // Mantém proporção de documento
-    });
-    const imgData = canvas.toDataURL('image/jpeg', 0.8);
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-    return pdf.output('blob');
-  };
-
   const salvarTudo = async () => {
-    if (loading) return;
     setLoading(true);
     try {
-      let fotoPath = '';
-      
-      // 1. Upload da Foto Otimizada
+      // 1. Gera imagem do relatório para o botão "Ver Imagem"
+      const elemento = areaCapturaRef.current;
+      const canvas = await html2canvas(elemento, {
+        scale: 2, useCORS: true, backgroundColor: "#7e7f7f", windowWidth: 500
+      });
+      const imagemFinalBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      const nomeArquivo = `relatorio_${Date.now()}.png`;
+
+      // 2. Upload da imagem gerada
+      await supabase.storage.from('fotos').upload(nomeArquivo, imagemFinalBlob);
+      const urlImgGerada = supabase.storage.from('fotos').getPublicUrl(nomeArquivo).data.publicUrl;
+      setImgGeradaUrl(urlImgGerada);
+
+      // 3. Upload da foto original (se houver)
+      let fotoOriginalUrl = fotoPreview;
       if (fotoBlob) {
-        const fileName = `foto_${Date.now()}.jpg`;
-        const { data, error } = await supabase.storage.from('fotos').upload(fileName, fotoBlob);
-        if (error) throw error;
-        fotoPath = supabase.storage.from('fotos').getPublicUrl(fileName).data.publicUrl;
+        const nomeFoto = `original_${Date.now()}.jpg`;
+        await supabase.storage.from('fotos').upload(nomeFoto, fotoBlob);
+        fotoOriginalUrl = supabase.storage.from('fotos').getPublicUrl(nomeFoto).data.publicUrl;
       }
 
-      // 2. Gerar e Upload do PDF
-      const pdfBlob = await gerarPDF();
-      const pdfName = `relatorio_${Date.now()}.pdf`;
-      const { data: pdfData, error: pdfError } = await supabase.storage.from('fotos').upload(pdfName, pdfBlob);
-      if (pdfError) throw pdfError;
-      const finalPdfUrl = supabase.storage.from('fotos').getPublicUrl(pdfName).data.publicUrl;
-      setPdfUrl(finalPdfUrl);
+      // 4. Salva no Banco de Dados e pega o ID
+      const { data, error } = await supabase.from('checklists').insert([{
+        ...form, itens, foto_url: fotoOriginalUrl, pdf_url: urlImgGerada
+      }]).select();
 
-      // 3. Salvar Banco de Dados
-      const { error: dbError } = await supabase.from('checklists').insert([{
-        evento: form.evento,
-        local: form.local,
-        presentes: parseInt(form.presentes) || 0,
-        convidados: parseInt(form.convidados) || 0,
-        itens: itens,
-        obs: form.obs,
-        responsavel: form.responsavel,
-        foto_url: fotoPath,
-        pdf_url: finalPdfUrl
-      }]);
-      
-      if (dbError) throw dbError;
+      if (error) throw error;
+      setReportId(data[0].id);
       setEtapa('sucesso');
     } catch (err) {
       alert("Erro ao salvar: " + err.message);
@@ -118,101 +112,101 @@ export default function ChecklistApp() {
     }
   };
 
+  const linkDigital = `${window.location.origin}/?id=${reportId}`;
+
+  const shareWhatsApp = () => {
+    const texto = `*Checklist Cerimonial & Eventos*\n\n*Evento:* ${form.evento}\n*Responsável:* ${form.responsavel}\n\n✨ *Relatório Digital:* ${linkDigital}\n\n🖼️ *Imagem para download:* ${imgGeradaUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_top');
+  };
+
+  // --- COMPONENTES DE VISUALIZAÇÃO ---
+  const RelatorioCard = () => (
+    <div ref={areaCapturaRef} className="w-[400px] bg-[#7e7f7f] p-6 flex flex-col items-center">
+      <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[130px] mb-6" />
+      <div className="w-full bg-white rounded-[25px] p-8 shadow-sm">
+        <h2 className="text-[#7e7f7f] text-center font-bold text-lg mb-6 tracking-widest uppercase">Relatório de Saída</h2>
+        <div className="space-y-3 text-xs text-gray-700">
+          <p><strong>EVENTO:</strong> {form.evento}</p>
+          <p><strong>LOCAL:</strong> {form.local}</p>
+          <p><strong>PRESENTES:</strong> {form.presentes} | <strong>CONVIDADOS:</strong> {form.convidados}</p>
+          <div className="border-t pt-2">
+            <strong>ITENS RECOLHIDOS:</strong>
+            <ul className="mt-1 space-y-1 italic">
+              {itens.map((it, i) => <li key={i}>- {it}</li>)}
+            </ul>
+          </div>
+          <p className="border-t pt-2"><strong>OBSERVAÇÕES:</strong> {form.obs || 'Nenhuma'}</p>
+          <p className="border-t pt-2"><strong>RESPONSÁVEL:</strong> {form.responsavel}</p>
+          {fotoPreview && <img src={fotoPreview} className="mt-4 rounded-xl w-full border border-gray-100 shadow-sm" />}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (loading && etapa === 'view') return <div className="min-h-screen bg-[#7e7f7f] flex items-center justify-center text-white italic">Carregando Relatório Digital...</div>;
+
   return (
-    <div className="min-h-screen bg-[#7e7f7f] p-4 flex flex-col items-center font-sans">
+    <div className="min-h-screen bg-[#7e7f7f] p-4 flex flex-col items-center font-sans text-slate-800">
       
       {etapa === 'form' && (
         <div className="w-full max-w-md">
-          <div className="mb-6 text-center">
-             <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" alt="Logo" className="max-w-[150px] mx-auto" />
-          </div>
-          <div className="bg-white rounded-[30px] p-8 shadow-2xl">
-            <h2 className="text-[#7e7f7f] text-center text-xl font-bold mb-6">Checklist de Saída</h2>
+          <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mx-auto mb-6" />
+          <div className="bg-white rounded-[30px] p-8 shadow-xl">
+            <h2 className="text-center font-bold text-gray-500 mb-6 uppercase tracking-widest">Novo Checklist</h2>
             <div className="space-y-4">
-              <input className="w-full border-b border-gray-200 py-2 outline-none" placeholder="Evento" onChange={e => setForm({...form, evento: e.target.value})} value={form.evento} />
-              <input className="w-full border-b border-gray-200 py-2 outline-none" placeholder="Local" onChange={e => setForm({...form, local: e.target.value})} value={form.local} />
+              <input className="w-full border-b p-2 outline-none" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
+              <input className="w-full border-b p-2 outline-none" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
               <div className="flex gap-4">
-                <input type="number" className="w-full border-b border-gray-200 py-2 outline-none" placeholder="Presentes" onChange={e => setForm({...form, presentes: e.target.value})} value={form.presentes} />
-                <input type="number" className="w-full border-b border-gray-200 py-2 outline-none" placeholder="Convidados" onChange={e => setForm({...form, convidados: e.target.value})} value={form.convidados} />
+                <input type="number" className="w-full border-b p-2 outline-none" placeholder="Presentes" value={form.presentes} onChange={e=>setForm({...form, presentes: e.target.value})} />
+                <input type="number" className="w-full border-b p-2 outline-none" placeholder="Convidados" value={form.convidados} onChange={e=>setForm({...form, convidados: e.target.value})} />
               </div>
-              <div>
-                <div className="flex gap-2 mt-2">
-                  <input className="flex-1 bg-gray-50 rounded-lg px-4 py-2" placeholder="Adicionar item..." value={novoItem} onChange={e => setNovoItem(e.target.value)} />
-                  <button onClick={handleAddItem} className="bg-[#ded0b8] text-[#7e7f7f] p-2 rounded-lg"><Plus /></button>
-                </div>
-                <ul className="mt-3 space-y-1">
-                  {itens.map((item, i) => (
-                    <li key={i} className="flex justify-between bg-gray-50 p-2 rounded-lg text-sm">
-                      {item} <button onClick={() => setItens(itens.filter((_, idx) => idx !== i))}><Trash2 size={14} className="text-red-400"/></button>
-                    </li>
-                  ))}
-                </ul>
+              <div className="flex gap-2">
+                <input className="flex-1 bg-gray-50 rounded-lg px-3" placeholder="Item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} />
+                <button onClick={handleAddItem} className="bg-[#ded0b8] p-2 rounded-lg text-white"><Plus /></button>
               </div>
-              <textarea className="w-full border border-gray-100 rounded-lg p-2 outline-none text-sm" placeholder="Observações..." rows="2" onChange={e => setForm({...form, obs: e.target.value})} value={form.obs}></textarea>
-              <input className="w-full border-b border-gray-200 py-2 outline-none" placeholder="Responsável" onChange={e => setForm({...form, responsavel: e.target.value})} value={form.responsavel} />
+              <ul className="text-sm space-y-1">
+                {itens.map((it, i) => <li key={i} className="bg-gray-50 p-2 rounded flex justify-between"> • {it} <Trash2 size={14} onClick={()=>setItens(itens.filter((_,idx)=>idx!==i))} className="text-red-300 cursor-pointer"/></li>)}
+              </ul>
+              <textarea className="w-full border rounded-lg p-2 text-sm" placeholder="Observações..." value={form.obs} onChange={e=>setForm({...form, obs: e.target.value})}></textarea>
+              <input className="w-full border-b p-2 outline-none" placeholder="Seu Nome" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
               
               <label className="flex flex-col items-center justify-center border-2 border-dashed border-[#ded0b8] rounded-2xl p-4 cursor-pointer">
-                <Camera className="text-[#7e7f7f] mb-1" />
-                <span className="text-xs font-bold text-[#7e7f7f]">FOTO DOS PERTENCES</span>
+                <Camera className="text-gray-400 mb-1" />
+                <span className="text-[10px] font-bold text-gray-400">FOTO DOS ITENS</span>
                 <input type="file" accept="image/*" capture="camera" className="hidden" onChange={handleFotoChange} />
-                {fotoPreview && <img src={fotoPreview} className="mt-2 h-24 rounded-lg shadow-md" />}
+                {fotoPreview && <img src={fotoPreview} className="mt-2 h-20 rounded-lg shadow-sm" />}
               </label>
 
-              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-[#7e7f7f] font-bold py-4 rounded-2xl mt-4 shadow-lg">GERAR ESBOÇO</button>
+              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl mt-4 shadow-lg active:scale-95 transition-all">VISUALIZAR</button>
             </div>
           </div>
         </div>
       )}
 
-      {etapa === 'resumo' && (
+      {(etapa === 'resumo' || etapa === 'view') && (
         <div className="w-full flex flex-col items-center">
-          {/* CONTAINER DO PDF - ESTILO FOLHA */}
-          <div ref={pdfRef} className="w-[450px] bg-[#7e7f7f] p-6 flex flex-col items-center overflow-hidden">
-            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mb-6" />
-            <div className="w-full bg-white rounded-[25px] p-8 shadow-xl text-[#333]">
-              <h2 className="text-[#7e7f7f] text-center font-bold text-lg mb-6 uppercase tracking-widest">Resumo do Evento</h2>
-              <div className="space-y-3 text-sm">
-                <p className="border-b pb-2"><strong>Evento:</strong> {form.evento}</p>
-                <p className="border-b pb-2"><strong>Local:</strong> {form.local}</p>
-                <div className="border-b pb-2 flex justify-between">
-                   <p><strong>Presentes:</strong> {form.presentes}</p>
-                   <p><strong>Convidados:</strong> {form.convidados}</p>
-                </div>
-                <div className="border-b pb-2">
-                  <strong>Itens Guardados:</strong>
-                  <ul className="mt-1 space-y-1">
-                    {itens.map((item, i) => <li key={i}>• {item}</li>)}
-                  </ul>
-                </div>
-                <p className="border-b pb-2"><strong>Obs:</strong> {form.obs}</p>
-                <p className="border-b pb-2"><strong>Responsável:</strong> {form.responsavel}</p>
-                {fotoPreview && (
-                  <div className="mt-4 pt-2">
-                    <p className="font-bold mb-2">Foto em anexo:</p>
-                    <img src={fotoPreview} className="rounded-xl w-full shadow-sm" />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <RelatorioCard />
           
-          <div className="mt-8 flex gap-4 w-full max-w-md pb-10">
-            <button onClick={() => setEtapa('form')} className="flex-1 bg-white text-[#7e7f7f] font-bold py-4 rounded-2xl shadow-md flex items-center justify-center gap-2"><Edit3 size={18}/> Editar</button>
-            <button onClick={salvarTudo} disabled={loading} className="flex-1 bg-[#8da38d] text-white font-bold py-4 rounded-2xl shadow-md flex items-center justify-center gap-2">
-              {loading ? <Loader2 className="animate-spin" /> : "Confirmar"}
-            </button>
-          </div>
+          {etapa === 'resumo' && (
+            <div className="mt-8 flex gap-3 w-full max-w-md pb-10 px-4">
+              <button onClick={() => setEtapa('form')} className="flex-1 bg-white text-gray-500 font-bold py-4 rounded-2xl shadow-md border flex items-center justify-center gap-2"><Edit3 size={16}/> Ajustar</button>
+              <button onClick={salvarTudo} disabled={loading} className="flex-2 bg-[#8da38d] text-white font-bold py-4 px-8 rounded-2xl shadow-md flex items-center justify-center gap-2">
+                {loading ? <Loader2 className="animate-spin" /> : "Confirmar e Enviar"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {etapa === 'sucesso' && (
         <div className="w-full max-w-md bg-white rounded-[30px] p-10 shadow-2xl text-center mt-10">
-          <div className="text-5xl mb-4">✅</div>
-          <h2 className="text-[#7e7f7f] text-2xl font-bold mb-6">Relatório Gerado!</h2>
+          <div className="text-5xl mb-4">✨</div>
+          <h2 className="text-gray-500 text-xl font-bold mb-6">Trabalho Concluído!</h2>
           <div className="space-y-4">
-            <button onClick={enviarZap} className="w-full bg-[#25D366] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2"><Send size={20}/> WHATSAPP</button>
-            <a href={pdfUrl} target="_blank" className="w-full bg-[#4a90e2] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-center inline-block"><FileDown size={20}/> ABRIR PDF</a>
-            <button onClick={() => window.location.reload()} className="w-full bg-gray-100 text-[#7e7f7f] font-bold py-4 rounded-2xl">VOLTAR</button>
+            <button onClick={shareWhatsApp} className="w-full bg-[#25D366] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md"><Send size={18}/> WHATSAPP (Mandar os dois)</button>
+            <a href={linkDigital} target="_blank" className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-center shadow-md"><Globe size={18}/> VER RELATÓRIO DIGITAL</a>
+            <a href={imgGeradaUrl} target="_blank" className="w-full bg-gray-400 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-center shadow-md"><ImageIcon size={18}/> BAIXAR IMAGEM</a>
+            <button onClick={() => window.location.reload()} className="w-full text-gray-400 font-bold py-4">NOVO CHECKLIST</button>
           </div>
         </div>
       )}
