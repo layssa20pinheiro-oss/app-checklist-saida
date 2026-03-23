@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { ArrowLeft, FileText, Send, Trash2, Loader2, Calendar } from 'lucide-react';
+import { ArrowLeft, FileText, Send, Trash2, Loader2, Calendar, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 const supabase = createClient(
@@ -44,29 +44,34 @@ export default function Historico() {
       <div className="max-w-md mx-auto">
         <div className="flex items-center mb-8 pt-4">
           <Link href={`/menu-evento?id=${id}`} className="bg-white/20 p-2 rounded-full text-white"><ArrowLeft size={20}/></Link>
-          <h1 className="text-white font-bold ml-4 uppercase tracking-widest text-sm">Histórico</h1>
+          <h1 className="text-white font-bold ml-4 uppercase tracking-widest text-sm">Histórico do Evento</h1>
         </div>
 
         {loading ? (
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-white/50" /></div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-10">
             {relatorios.map(r => (
-              <div key={r.id} className="bg-white p-5 rounded-[25px] shadow-lg flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                   <div className="bg-gray-100 p-3 rounded-2xl text-[#ded0b8]"><FileText size={20}/></div>
-                   <div>
-                      <p className="font-bold text-gray-600 text-xs uppercase leading-tight">{r.evento || 'Relatório'}</p>
-                      <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase flex items-center gap-1">
-                        <Calendar size={10}/> {new Date(r.created_at).toLocaleDateString('pt-BR')}
-                      </p>
-                   </div>
+              
+              // O CARD AGORA É UM LINK PARA A TELA DE DETALHES
+              <Link key={r.id} href={`/relatorio?reportId=${r.id}`} className="block">
+                <div className="bg-white p-5 rounded-[25px] shadow-lg flex items-center justify-between hover:scale-[1.01] transition-all">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-gray-100 p-3 rounded-2xl text-[#ded0b8]"><FileText size={20}/></div>
+                        <div>
+                            {/* O NOME DO RELATÓRIO É O LINK PRINCIPAL */}
+                            <p className="font-bold text-gray-600 text-xs uppercase leading-tight hover:text-[#8da38d] transition-colors">{r.evento || 'Relatório'}</p>
+                            <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase flex items-center gap-1">
+                                <Calendar size={10}/> {new Date(r.created_at).toLocaleDateString('pt-BR')}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    {/* SETA DE NAVEGAÇÃO PARA INDICAR QUE PODE CLICAR */}
+                    <ChevronRight className="text-[#ded0b8]" size={18} />
                 </div>
-                <div className="flex gap-2">
-                   <a href={r.pdf_url} target="_blank" rel="noreferrer" className="p-2 text-green-400"><Send size={18}/></a>
-                   <button onClick={() => excluir(r.id)} className="p-2 text-red-200"><Trash2 size={18}/></button>
-                </div>
-              </div>
+              </Link>
+
             ))}
             {relatorios.length === 0 && <p className="text-center text-white/40 italic py-10">Nenhum relatório neste evento.</p>}
           </div>
