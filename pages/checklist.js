@@ -12,7 +12,7 @@ const supabase = createClient(
 
 export default function ChecklistPage() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id, reportId } = router.query;
 
   const [etapa, setEtapa] = useState('form');
   const [loading, setLoading] = useState(false);
@@ -20,13 +20,23 @@ export default function ChecklistPage() {
   const [novoItem, setNovoItem] = useState('');
   const [form, setForm] = useState({ evento: '', local: '', presentes: '', convidados: '', obs: '', responsavel: '' });
   const [fotoPreview, setFotoPreview] = useState(null);
-  const [fotoBlob, setFotoBlob] = useState(null);
   const [imgGeradaUrl, setImgGeradaUrl] = useState('');
-  const [reportId, setReportId] = useState('');
   const areaCapturaRef = useRef();
 
+  // BUSCA DADOS SE FOR EDIÇÃO
+  useEffect(() => {
+    if (reportId) {
+      supabase.from('checklists').select('*').eq('id', reportId).single().then(({ data }) => {
+        if (data) {
+          setForm(data);
+          setItens(data.itens || []);
+          setFotoPreview(data.foto_url);
+        }
+      });
+    }
+  }, [reportId]);
+
   const salvarRelatorio = async () => {
-    if (!id) return alert("Erro: ID do evento não encontrado.");
     setLoading(true);
     try {
       const canvas = await html2canvas(areaCapturaRef.current, { scale: 2, backgroundColor: "#7e7f7f" });
@@ -35,9 +45,21 @@ export default function ChecklistPage() {
       await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
       const publicUrl = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
 
-      const { data } = await supabase.from('checklists').insert([{ ...form, itens, pdf_url: publicUrl, evento_id: id }]).select();
-      if (data) { setReportId(data[0].id); setImgGeradaUrl(publicUrl); setEtapa('sucesso'); }
-    } catch (e) { alert(e.message); }
+      const dadosParaSalvar = { ...form, itens, pdf_url: publicUrl, evento_id: id };
+
+      let erro;
+      if (reportId) {
+        const { error } = await supabase.from('checklists').update(dadosParaSalvar).eq('id', reportId);
+        erro = error;
+      } else {
+        const { error } = await supabase.from('checklists').insert([dadosParaSalvar]);
+        erro = error;
+      }
+
+      if (erro) throw erro;
+      setImgGeradaUrl(publicUrl);
+      setEtapa('sucesso');
+    } catch (e) { alert("Erro ao salvar: " + e.message); }
     setLoading(false);
   };
 
@@ -47,29 +69,20 @@ export default function ChecklistPage() {
         <div className="w-full max-w-md">
           <Link href={`/menu-evento?id=${id}`} className="text-white/50 mb-4 flex items-center gap-2 text-xs uppercase font-bold tracking-widest"><ArrowLeft size={16}/> Voltar</Link>
           <div className="bg-white rounded-[30px] p-8 shadow-xl">
-            <h2 className="text-center font-bold text-gray-500 mb-6 uppercase text-sm tracking-widest">Novo Checklist</h2>
-            <div className="space-y-4">
-              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
-              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
+            <h2 className="text-center font-bold text-gray-500 mb-6 uppercase text-sm tracking-widest">{reportId ? "Editar Relatório" : "Novo Checklist"}</h2>
+            <div className="space-y-4 text-gray-600">
+              <input className="w-full border-b p-2 outline-none" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
+              <input className="w-full border-b p-2 outline-none" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
               <div className="flex gap-2">
                 <input className="flex-1 bg-gray-50 rounded-lg px-3 text-xs" placeholder="Adicionar item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} />
                 <button onClick={() => { if(novoItem.trim()) { setItens([...itens, novoItem.trim()]); setNovoItem(''); } }} className="bg-[#ded0b8] p-2 rounded-lg text-white"><Plus size={16}/></button>
               </div>
               <ul className="text-xs space-y-1">
-                {itens.map((it, i) => <li key={i} className="bg-gray-50 p-2 rounded flex justify-between uppercase italic">• {it} <Trash2 size={14} onClick={()=>setItens(itens.filter((_,idx)=>idx!==i))} className="text-red-200"/></li>)}
+                {itens.map((it, i) => <li key={i} className="bg-gray-50 p-2 rounded flex justify-between uppercase italic">• {it} <Trash2 size={14} onClick={()=>setItens(itens.filter((_,idx)=>idx!==i))} className="text-red-200 cursor-pointer"/></li>)}
               </ul>
               <textarea className="w-full border rounded-lg p-2 text-xs" placeholder="Observações..." value={form.obs} onChange={e=>setForm({...form, obs: e.target.value})}></textarea>
-              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Responsável" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
-              <label className="flex flex-col items-center justify-center border-2 border-dashed border-[#ded0b8] rounded-2xl p-4 cursor-pointer">
-                <Camera className="text-gray-400 mb-1" />
-                <span className="text-[10px] font-bold text-gray-400 uppercase">FOTO DOS ITENS</span>
-                <input type="file" accept="image/*" capture="camera" className="hidden" onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (file) { setFotoPreview(URL.createObjectURL(file)); setFotoBlob(file); }
-                }} />
-                {fotoPreview && <img src={fotoPreview} className="mt-2 h-20 rounded-lg shadow-sm" alt="Preview" />}
-              </label>
-              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl mt-4 uppercase text-xs tracking-widest">Visualizar</button>
+              <input className="w-full border-b p-2 outline-none" placeholder="Responsável" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
+              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl mt-4 uppercase text-xs tracking-widest shadow-md">Visualizar Checklist</button>
             </div>
           </div>
         </div>
@@ -81,26 +94,32 @@ export default function ChecklistPage() {
             <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[120px] mb-6" alt="Logo" />
             <div className="w-full bg-white rounded-[25px] p-8 text-gray-700 text-xs shadow-sm">
                 <h2 className="text-center font-bold text-lg mb-6 uppercase tracking-[5px] text-[#7e7f7f]">Relatório</h2>
-                <p className="mb-2"><strong>EVENTO:</strong> {form.evento}</p>
-                <p className="mb-2"><strong>LOCAL:</strong> {form.local}</p>
-                <div className="border-t pt-2 mt-2"><strong>ITENS:</strong></div>
-                <ul className="italic text-gray-400 mb-4">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul>
-                <p className="border-t pt-2"><strong>ASSINATURA:</strong> {form.responsavel}</p>
-                {fotoPreview && <img src={fotoPreview} className="mt-4 rounded-xl w-full border" alt="Foto" />}
+                <div className="space-y-3">
+                    <p className="border-b pb-1"><strong>EVENTO:</strong> {form.evento}</p>
+                    <p className="border-b pb-1"><strong>LOCAL:</strong> {form.local}</p>
+                    <div><strong>ITENS:</strong></div>
+                    <ul className="italic text-gray-400 pl-2">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul>
+                    <p className="border-t pt-2"><strong>ASSINATURA:</strong> {form.responsavel}</p>
+                </div>
             </div>
           </div>
           <div className="fixed bottom-0 bg-white p-4 flex gap-2 w-full max-w-md rounded-t-3xl shadow-2xl">
-            <button onClick={() => setEtapa('form')} className="flex-1 bg-gray-50 py-4 rounded-2xl text-xs font-bold uppercase text-gray-400">Voltar</button>
-            <button onClick={salvarRelatorio} className="flex-2 bg-[#8da38d] text-white py-4 px-8 rounded-2xl text-xs font-bold uppercase">{loading ? "Salvando..." : "Confirmar e Enviar"}</button>
+            <button onClick={() => setEtapa('form')} className="flex-1 bg-gray-50 py-4 rounded-2xl text-xs font-bold uppercase text-gray-400">Ajustar</button>
+            <button onClick={salvarRelatorio} className="flex-2 bg-[#8da38d] text-white py-4 px-8 rounded-2xl text-xs font-bold uppercase shadow-lg">
+                {loading ? <Loader2 className="animate-spin mx-auto"/> : "Confirmar e Enviar"}
+            </button>
           </div>
         </div>
       )}
 
       {etapa === 'sucesso' && (
-        <div className="bg-white rounded-[40px] p-10 text-center shadow-2xl max-w-xs mt-10">
+        <div className="bg-white rounded-[40px] p-10 text-center shadow-2xl max-w-xs mt-20">
           <div className="text-5xl mb-4">✨</div>
-          <h2 className="text-gray-500 font-bold uppercase text-sm tracking-widest mb-6">Relatório Pronto!</h2>
-          <button onClick={() => router.push(`/menu-evento?id=${id}`)} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase tracking-widest">Voltar ao Evento</button>
+          <h2 className="text-gray-500 font-bold uppercase text-sm tracking-widest mb-8">Relatório Gerado!</h2>
+          <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent('Olá! Segue o relatório do evento: ' + imgGeradaUrl)}`)} className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-bold text-xs uppercase flex items-center justify-center gap-2 mb-4 shadow-lg">
+            <Send size={16}/> Enviar no WhatsApp
+          </button>
+          <button onClick={() => router.push(`/menu-evento?id=${id}`)} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase tracking-widest">Voltar ao Menu</button>
         </div>
       )}
     </div>
