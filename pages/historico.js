@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { ArrowLeft, FileText, Send, Trash2, Loader2, Calendar, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Send, Trash2, Loader2, Calendar, Edit2, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 const supabase = createClient(
@@ -15,25 +15,17 @@ export default function Historico() {
   const [relatorios, setRelatorios] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (id) { carregarRelatorios(); }
-  }, [id]);
+  useEffect(() => { if (id) carregarRelatorios(); }, [id]);
 
   async function carregarRelatorios() {
-    if (!id) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('checklists')
-      .select('*')
-      .eq('evento_id', id)
-      .order('created_at', { ascending: false });
-    
+    const { data } = await supabase.from('checklists').select('*').eq('evento_id', id).order('created_at', { ascending: false });
     if (data) setRelatorios(data);
     setLoading(false);
   }
 
   const excluir = async (relId) => {
-    if (confirm("Deseja apagar este relatório permanentemente?")) {
+    if (confirm("Apagar este relatório?")) {
       await supabase.from('checklists').delete().eq('id', relId);
       carregarRelatorios();
     }
@@ -44,36 +36,39 @@ export default function Historico() {
       <div className="max-w-md mx-auto">
         <div className="flex items-center mb-8 pt-4">
           <Link href={`/menu-evento?id=${id}`} className="bg-white/20 p-2 rounded-full text-white"><ArrowLeft size={20}/></Link>
-          <h1 className="text-white font-bold ml-4 uppercase tracking-widest text-sm">Histórico do Evento</h1>
+          <h1 className="text-white font-bold ml-4 uppercase tracking-widest text-sm">Histórico</h1>
         </div>
 
         {loading ? (
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-white/50" /></div>
         ) : (
-          <div className="space-y-4 pb-10">
+          <div className="space-y-6">
             {relatorios.map(r => (
-              
-              // O CARD AGORA É UM LINK PARA A TELA DE DETALHES
-              <Link key={r.id} href={`/relatorio?reportId=${r.id}`} className="block">
-                <div className="bg-white p-5 rounded-[25px] shadow-lg flex items-center justify-between hover:scale-[1.01] transition-all">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-gray-100 p-3 rounded-2xl text-[#ded0b8]"><FileText size={20}/></div>
+              <div key={r.id} className="bg-white rounded-[30px] p-6 shadow-xl animate-in fade-in duration-500">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-gray-100 p-2 rounded-xl text-[#ded0b8]"><FileText size={20}/></div>
                         <div>
-                            {/* O NOME DO RELATÓRIO É O LINK PRINCIPAL */}
-                            <p className="font-bold text-gray-600 text-xs uppercase leading-tight hover:text-[#8da38d] transition-colors">{r.evento || 'Relatório'}</p>
-                            <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase flex items-center gap-1">
-                                <Calendar size={10}/> {new Date(r.created_at).toLocaleDateString('pt-BR')}
-                            </p>
+                            <h3 className="font-bold text-gray-700 uppercase text-xs leading-tight">{r.evento || 'Relatório'}</h3>
+                            <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">{new Date(r.created_at).toLocaleDateString('pt-BR')}</p>
                         </div>
                     </div>
-                    
-                    {/* SETA DE NAVEGAÇÃO PARA INDICAR QUE PODE CLICAR */}
-                    <ChevronRight className="text-[#ded0b8]" size={18} />
+                    <button onClick={() => excluir(r.id)} className="text-red-100 hover:text-red-300"><Trash2 size={18}/></button>
                 </div>
-              </Link>
+                
+                <p className="text-[10px] text-gray-400 uppercase font-bold mb-4 italic">Responsável: {r.responsavel || '-'}</p>
 
+                <div className="flex gap-2">
+                    <Link href={`/checklist?id=${id}&reportId=${r.id}`} className="flex-1 bg-gray-50 text-gray-400 text-[10px] font-bold uppercase py-3 rounded-xl flex items-center justify-center gap-2 border border-gray-100">
+                        <Edit2 size={14}/> Editar
+                    </Link>
+                    <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent('Relatório: ' + r.pdf_url)}`)} className="flex-1 bg-[#25D366] text-white text-[10px] font-bold uppercase py-3 rounded-xl flex items-center justify-center gap-2 shadow-sm">
+                        <Send size={14}/> Reenviar
+                    </button>
+                </div>
+              </div>
             ))}
-            {relatorios.length === 0 && <p className="text-center text-white/40 italic py-10">Nenhum relatório neste evento.</p>}
+            {relatorios.length === 0 && <p className="text-center text-white/40 italic py-10 uppercase text-[10px] tracking-widest">Nenhum relatório aqui.</p>}
           </div>
         )}
       </div>
