@@ -11,24 +11,21 @@ const supabase = createClient(
 
 export default function Historico() {
   const router = useRouter();
-  // CORREÇÃO AQUI: Mudamos de { id } para { eventoId } para bater com o link do menu
-  const { eventoId } = router.query; 
+  const { id } = router.query; 
   const [relatorios, setRelatorios] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (eventoId) { 
-      carregarRelatorios(); 
-    }
-  }, [eventoId]);
+    if (id) { carregarRelatorios(); }
+  }, [id]);
 
   async function carregarRelatorios() {
+    if (!id) return;
     setLoading(true);
-    // Buscamos apenas os relatórios que possuem a "etiqueta" deste evento específico
     const { data } = await supabase
       .from('checklists')
       .select('*')
-      .eq('evento_id', eventoId)
+      .eq('evento_id', id)
       .order('created_at', { ascending: false });
     
     if (data) setRelatorios(data);
@@ -46,10 +43,7 @@ export default function Historico() {
     <div className="min-h-screen bg-[#7e7f7f] p-6 font-sans">
       <div className="max-w-md mx-auto">
         <div className="flex items-center mb-8 pt-4">
-          {/* Ajustado o link de volta para usar o eventoId correto */}
-          <Link href={`/menu-evento?id=${eventoId}`} className="bg-white/20 p-2 rounded-full text-white">
-            <ArrowLeft size={20}/>
-          </Link>
+          <Link href={`/menu-evento?id=${id}`} className="bg-white/20 p-2 rounded-full text-white"><ArrowLeft size={20}/></Link>
           <h1 className="text-white font-bold ml-4 uppercase tracking-widest text-sm">Histórico</h1>
         </div>
 
@@ -58,27 +52,23 @@ export default function Historico() {
         ) : (
           <div className="space-y-4">
             {relatorios.map(r => (
-              <div key={r.id} className="bg-white p-5 rounded-[25px] shadow-lg flex items-center justify-between animate-in fade-in duration-500">
+              <div key={r.id} className="bg-white p-5 rounded-[25px] shadow-lg flex items-center justify-between">
                 <div className="flex items-center gap-4">
                    <div className="bg-gray-100 p-3 rounded-2xl text-[#ded0b8]"><FileText size={20}/></div>
                    <div>
-                      <p className="font-bold text-gray-600 text-xs uppercase leading-tight">{r.evento || 'Relatório sem nome'}</p>
+                      <p className="font-bold text-gray-600 text-xs uppercase leading-tight">{r.evento || 'Relatório'}</p>
                       <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase flex items-center gap-1">
                         <Calendar size={10}/> {new Date(r.created_at).toLocaleDateString('pt-BR')}
                       </p>
                    </div>
                 </div>
                 <div className="flex gap-2">
-                   <a href={r.pdf_url} target="_blank" rel="noreferrer" className="p-2 text-green-400 hover:scale-110 transition-transform"><Send size={18}/></a>
-                   <button onClick={() => excluir(r.id)} className="p-2 text-red-200 hover:text-red-400 transition-colors"><Trash2 size={18}/></button>
+                   <a href={r.pdf_url} target="_blank" rel="noreferrer" className="p-2 text-green-400"><Send size={18}/></a>
+                   <button onClick={() => excluir(r.id)} className="p-2 text-red-200"><Trash2 size={18}/></button>
                 </div>
               </div>
             ))}
-            {relatorios.length === 0 && (
-              <div className="text-center py-20">
-                <p className="text-white/40 italic text-sm">Nenhum relatório encontrado para este evento.</p>
-              </div>
-            )}
+            {relatorios.length === 0 && <p className="text-center text-white/40 italic py-10">Nenhum relatório neste evento.</p>}
           </div>
         )}
       </div>
