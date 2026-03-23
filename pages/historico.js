@@ -24,6 +24,12 @@ export default function Historico() {
     setLoading(false);
   }
 
+  const enviarNovamente = (r) => {
+    const linkApp = `${window.location.origin}/?id=${r.id}`;
+    const texto = `Olá! Finalizamos a organização e conferência dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe. Aqui está o resumo de tudo o que guardamos:\n\n✨ *Seu Relatório Digital:* ${linkApp}\n\nFoi um prazer fazer parte desse sonho.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_top');
+  };
+
   const excluir = async (relId) => {
     if (confirm("Apagar este relatório?")) {
       await supabase.from('checklists').delete().eq('id', relId);
@@ -39,9 +45,7 @@ export default function Historico() {
           <h1 className="text-white font-bold ml-4 uppercase tracking-widest text-sm">Histórico</h1>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-white/50" /></div>
-        ) : (
+        {loading ? <div className="flex justify-center py-20"><Loader2 className="animate-spin text-white/50" /></div> : (
           <div className="space-y-6">
             {relatorios.map(r => (
               <div key={r.id} className="bg-white rounded-[30px] p-6 shadow-xl animate-in fade-in duration-500">
@@ -55,20 +59,18 @@ export default function Historico() {
                     </div>
                     <button onClick={() => excluir(r.id)} className="text-red-100 hover:text-red-300"><Trash2 size={18}/></button>
                 </div>
-                
                 <p className="text-[10px] text-gray-400 uppercase font-bold mb-4 italic">Responsável: {r.responsavel || '-'}</p>
-
                 <div className="flex gap-2">
                     <Link href={`/checklist?id=${id}&reportId=${r.id}`} className="flex-1 bg-gray-50 text-gray-400 text-[10px] font-bold uppercase py-3 rounded-xl flex items-center justify-center gap-2 border border-gray-100">
                         <Edit2 size={14}/> Editar
                     </Link>
-                    <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent('Relatório: ' + r.pdf_url)}`)} className="flex-1 bg-[#25D366] text-white text-[10px] font-bold uppercase py-3 rounded-xl flex items-center justify-center gap-2 shadow-sm">
+                    <button onClick={() => enviarNovamente(r)} className="flex-1 bg-[#25D366] text-white text-[10px] font-bold uppercase py-3 rounded-xl flex items-center justify-center gap-2 shadow-sm">
                         <Send size={14}/> Reenviar
                     </button>
                 </div>
               </div>
             ))}
-            {relatorios.length === 0 && <p className="text-center text-white/40 italic py-10 uppercase text-[10px] tracking-widest">Nenhum relatório aqui.</p>}
+            {relatorios.length === 0 && <p className="text-center text-white/40 italic py-10 uppercase text-[10px] tracking-widest font-bold">Nenhum relatório aqui.</p>}
           </div>
         )}
       </div>
