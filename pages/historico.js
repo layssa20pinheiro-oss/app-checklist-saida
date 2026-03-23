@@ -1,6 +1,7 @@
+import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Search, Calendar, User, Edit3, Send, ArrowLeft, Loader2, Trash2, Link2 } from 'lucide-react';
+import { ArrowLeft, FileText, Send, Trash2, Loader2, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
 const supabase = createClient(
@@ -9,137 +10,65 @@ const supabase = createClient(
 );
 
 export default function Historico() {
+  const router = useRouter();
+  const { id } = router.query; // Pega o ID do evento da URL
   const [relatorios, setRelatorios] = useState([]);
-  const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    carregarDados();
-  }, []);
+    if (id) { carregarRelatorios(); }
+  }, [id]);
 
-  async function carregarDados() {
+  async function carregarRelatorios() {
     setLoading(true);
-    const { data, error } = await supabase
+    // FILTRO IMPORTANTE: .eq('evento_id', id) garante que só mostre deste evento
+    const { data } = await supabase
       .from('checklists')
       .select('*')
+      .eq('evento_id', id)
       .order('created_at', { ascending: false });
     
     if (data) setRelatorios(data);
     setLoading(false);
   }
 
-  const deletarRelatorio = async (id, nomeEvento) => {
-    const confirmacao = window.confirm(`Deseja realmente apagar o relatório de "${nomeEvento}"? Esta ação não pode ser desfeita.`);
-    
-    if (confirmacao) {
-      const { error } = await supabase
-        .from('checklists')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        alert("Erro ao apagar: " + error.message);
-      } else {
-        setRelatorios(relatorios.filter(r => r.id !== id));
-      }
+  const excluir = async (relId) => {
+    if (confirm("Deseja apagar este relatório permanentemente?")) {
+      await supabase.from('checklists').delete().eq('id', relId);
+      carregarRelatorios();
     }
   };
 
-  const filtrarRelatorios = relatorios.filter(r => 
-    r.evento?.toLowerCase().includes(busca.toLowerCase()) || 
-    r.responsavel?.toLowerCase().includes(busca.toLowerCase())
-  );
-
-  // --- SCRIPT PROFISSIONAL DE REENVIO ---
-  const enviarZap = (r) => {
-    const linkDigital = `${window.location.origin}/?id=${r.id}`;
-    
-    const texto = `Olá! Finalizamos a organização e conferência dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe. Aqui está o resumo de tudo o que guardamos:
-
-✨ *Seu Relatório Digital:* ${linkDigital}
-
-Foi um prazer fazer parte desse sonho.`;
-
-    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
-  };
-
   return (
-    <div className="min-h-screen bg-[#7e7f7f] p-4 font-sans text-slate-800">
-      <div className="max-w-2xl mx-auto">
-        
-        <div className="flex items-center justify-between mb-8">
-          <Link href="/" className="bg-white/20 p-2 rounded-full text-white hover:bg-white/30 transition">
-            <ArrowLeft size={20} />
-          </Link>
-          <h1 className="text-white font-bold text-xl tracking-widest uppercase text-center flex-1">Gerenciar</h1>
-          <div className="w-10"></div>
-        </div>
-
-        <div className="relative mb-6">
-          <Search className="absolute left-4 top-3.5 text-gray-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar evento ou responsável..." 
-            className="w-full bg-white rounded-2xl py-3 pl-12 pr-4 shadow-lg outline-none text-sm"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
+    <div className="min-h-screen bg-[#7e7f7f] p-6 font-sans">
+      <div className="max-w-md mx-auto">
+        <div className="flex items-center mb-8 pt-4">
+          <Link href={`/menu-evento?id=${id}`} className="bg-white/20 p-2 rounded-full text-white"><ArrowLeft size={20}/></Link>
+          <h1 className="text-white font-bold ml-4 uppercase tracking-widest text-sm">Histórico</h1>
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-white opacity-50">
-            <Loader2 className="animate-spin mb-2" />
-            <p className="italic">Abrindo arquivos...</p>
-          </div>
+          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-white/50" /></div>
         ) : (
-          <div className="space-y-4 pb-10">
-            {filtrarRelatorios.map((rel) => (
-              <div key={rel.id} className="bg-white rounded-[25px] p-6 shadow-xl border-l-8 border-[#ded0b8] relative">
-                
-                <button 
-                  onClick={() => deletarRelatorio(rel.id, rel.evento)}
-                  className="absolute top-6 right-6 text-gray-300 hover:text-red-300 transition-colors p-1"
-                  title="Apagar relatório"
-                >
-                  <Trash2 size={16} />
-                </button>
-
-                <div className="flex justify-between items-start mb-4 pr-8">
-                  <div>
-                    <h3 className="font-bold text-[#7e7f7f] text-lg uppercase leading-tight mb-1">{rel.evento || 'Evento sem Nome'}</h3>
-                    <div className="flex items-center gap-2 text-gray-400 text-xs">
-                      <Calendar size={12} />
-                      {new Date(rel.created_at).toLocaleDateString('pt-BR')}
-                    </div>
-                  </div>
+          <div className="space-y-4">
+            {relatorios.map(r => (
+              <div key={r.id} className="bg-white p-5 rounded-[25px] shadow-lg flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                   <div className="bg-gray-100 p-3 rounded-2xl text-[#ded0b8]"><FileText size={20}/></div>
+                   <div>
+                      <p className="font-bold text-gray-600 text-xs uppercase leading-tight">{r.evento}</p>
+                      <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase flex items-center gap-1">
+                        <Calendar size={10}/> {new Date(r.created_at).toLocaleDateString('pt-BR')}
+                      </p>
+                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 text-gray-500 text-sm mb-6 border-t pt-4">
-                  <User size={14} />
-                  <span className="font-medium text-xs uppercase tracking-tighter">Resp: {rel.responsavel || 'Não informado'}</span>
-                </div>
-
                 <div className="flex gap-2">
-                  {/* BOTÃO QUE ATIVA O MODO DE EDIÇÃO NO APP PRINCIPAL */}
-                  <Link 
-                    href={`/?id=${rel.id}&edit=true`} 
-                    className="flex-1 bg-gray-50 text-gray-500 font-bold py-3 rounded-xl text-[10px] flex items-center justify-center gap-2 hover:bg-gray-100 uppercase"
-                  >
-                    <Edit3 size={14} /> Editar Dados
-                  </Link>
-                  <button 
-                    onClick={() => enviarZap(rel)}
-                    className="flex-1 bg-[#25D366] text-white font-bold py-3 rounded-xl text-[10px] flex items-center justify-center gap-2 shadow-sm active:scale-95 uppercase"
-                  >
-                    <Send size={14} /> Reenviar no Zap
-                  </button>
+                   <a href={r.pdf_url} target="_blank" rel="noreferrer" className="p-2 text-green-400"><Send size={18}/></a>
+                   <button onClick={() => excluir(r.id)} className="p-2 text-red-200"><Trash2 size={18}/></button>
                 </div>
               </div>
             ))}
-
-            {filtrarRelatorios.length === 0 && (
-              <p className="text-center text-white/50 py-10 italic">Nenhum relatório encontrado.</p>
-            )}
+            {relatorios.length === 0 && <p className="text-center text-white/40 italic py-10">Nenhum relatório neste evento.</p>}
           </div>
         )}
       </div>
