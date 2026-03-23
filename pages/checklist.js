@@ -22,7 +22,6 @@ export default function ChecklistPage() {
   const [finalReportId, setFinalReportId] = useState('');
   const areaCapturaRef = useRef();
 
-  // RECUPERA OS DADOS PARA EDITAR
   useEffect(() => {
     if (reportId) {
       supabase.from('checklists').select('*').eq('id', reportId).single().then(({ data }) => {
@@ -59,7 +58,7 @@ export default function ChecklistPage() {
 
   const enviarWhatsApp = () => {
     const linkApp = `${window.location.origin}/?id=${finalReportId}`;
-    const texto = `Olá! Finalizamos a organização e conferência dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe. Aqui está o resumo de tudo o que guardamos:\n\n✨ *Seu Relatório Digital:* ${linkApp}\n\nFoi um prazer fazer parte desse sonho.`;
+    const texto = `Olá! Finalizamos a organização dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe.\n\n✨ *Seu Relatório Digital:* ${linkApp}\n\nFoi um prazer fazer parte desse sonho.`;
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_top');
   };
 
@@ -88,7 +87,7 @@ export default function ChecklistPage() {
       )}
 
       {etapa === 'resumo' && (
-        <div className="w-full flex flex-col items-center pb-20 animate-in fade-in duration-500">
+        <div className="w-full flex flex-col items-center pb-20">
           <div ref={areaCapturaRef} className="w-[380px] bg-[#7e7f7f] p-6 flex flex-col items-center">
             <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[120px] mb-6" />
             <div className="w-full bg-white rounded-[25px] p-8 text-gray-700 text-xs shadow-sm">
@@ -110,10 +109,10 @@ export default function ChecklistPage() {
       )}
 
       {etapa === 'sucesso' && (
-        <div className="bg-white rounded-[40px] p-10 text-center shadow-2xl max-w-xs mt-20 animate-in zoom-in">
+        <div className="bg-white rounded-[40px] p-10 text-center shadow-2xl max-w-xs mt-20">
           <div className="text-5xl mb-4">✨</div>
           <h2 className="text-gray-500 font-bold uppercase text-sm tracking-widest mb-10">Relatório Criado!</h2>
-          <button onClick={enviarWhatsApp} className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-bold text-xs uppercase flex items-center justify-center gap-2 mb-4 shadow-lg active:scale-95 transition-all">
+          <button onClick={enviarWhatsApp} className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-bold text-xs uppercase flex items-center justify-center gap-2 mb-4 shadow-lg">
             <Send size={16}/> Enviar no WhatsApp
           </button>
           <button onClick={() => router.push(`/menu-evento?id=${id}`)} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase tracking-widest">Voltar ao Menu</button>
