@@ -25,11 +25,22 @@ export default function ListaConvidados() {
   const addConvidado = async () => {
     if (!nome) return;
     setLoading(true);
-    // Limpa o telefone para deixar apenas números
     const telLimpo = telefone.replace(/\D/g, '');
-    await supabase.from('convidados').insert([{ nome, mesa, telefone: telLimpo, rsvp: 'pendente' }]);
-    setNome(''); setMesa(''); setTelefone('');
-    carregarLista();
+    
+    // Tenta salvar e captura se houver erro
+    const { error } = await supabase.from('convidados').insert([{ 
+      nome, 
+      mesa, 
+      telefone: telLimpo, 
+      rsvp: 'pendente' 
+    }]);
+
+    if (error) {
+      alert("Erro ao salvar: " + error.message);
+    } else {
+      setNome(''); setMesa(''); setTelefone('');
+      carregarLista();
+    }
     setLoading(false);
   };
 
@@ -43,8 +54,6 @@ export default function ListaConvidados() {
   const enviarConvite = (c) => {
     const link = `${window.location.origin}/convite?id=${c.id}`;
     const texto = `Olá *${c.nome}*! ✨\n\nÉ um prazer convidar você para o nosso evento. Por favor, confirme sua presença no link abaixo para gerar seu QR Code de entrada:\n\n🔗 ${link}`;
-    
-    // Se tiver telefone, envia direto para o número. Se não, usa o compartilhamento geral.
     if (c.telefone) {
       const telDestino = c.telefone.startsWith('55') ? c.telefone : `55${c.telefone}`;
       window.open(`https://wa.me/${telDestino}?text=${encodeURIComponent(texto)}`, '_blank');
@@ -53,10 +62,8 @@ export default function ListaConvidados() {
     }
   };
 
-  // CÁLCULOS DO CONTADOR
   const total = lista.length;
   const confirmados = lista.filter(c => c.rsvp === 'confirmado').length;
-  const recusados = lista.filter(c => c.rsvp === 'recusado').length;
   const pendentes = lista.filter(c => c.rsvp === 'pendente').length;
 
   return (
@@ -67,7 +74,6 @@ export default function ListaConvidados() {
           <h1 className="text-white font-bold ml-4 uppercase tracking-widest text-sm">Lista de Convidados</h1>
         </div>
 
-        {/* CONTADOR DE RESUMO */}
         <div className="grid grid-cols-3 gap-2 mb-6 text-center">
           <div className="bg-white/10 border border-white/20 rounded-2xl p-3 text-white">
             <p className="text-[9px] uppercase tracking-tighter opacity-70">Total</p>
@@ -111,7 +117,7 @@ export default function ListaConvidados() {
                 <div>
                   <p className="font-bold text-gray-600 text-sm uppercase leading-tight">{c.nome}</p>
                   <p className="text-[10px] text-gray-400 uppercase tracking-tighter">
-                    {c.telefone ? `Tel: ${c.telefone}` : 'Sem Telefone'} {c.mesa && ` | Mesa: ${c.mesa}`}
+                    {c.telefone ? `Tel: ${c.telefone}` : 'Sem Tel'} {c.mesa && ` | Mesa: ${c.mesa}`}
                   </p>
                 </div>
               </div>
