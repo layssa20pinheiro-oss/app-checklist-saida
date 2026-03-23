@@ -12,7 +12,7 @@ const supabase = createClient(
 
 export default function ChecklistPage() {
   const router = useRouter();
-  const { eventoId } = router.query;
+  const { id } = router.query;
 
   const [etapa, setEtapa] = useState('form');
   const [loading, setLoading] = useState(false);
@@ -26,7 +26,7 @@ export default function ChecklistPage() {
   const areaCapturaRef = useRef();
 
   const salvarRelatorio = async () => {
-    if (!eventoId) return alert("Erro: ID do evento não encontrado.");
+    if (!id) return alert("Erro: ID do evento não encontrado.");
     setLoading(true);
     try {
       const canvas = await html2canvas(areaCapturaRef.current, { scale: 2, backgroundColor: "#7e7f7f" });
@@ -35,23 +35,17 @@ export default function ChecklistPage() {
       await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
       const publicUrl = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
 
-      const { data } = await supabase.from('checklists').insert([{ ...form, itens, pdf_url: publicUrl, evento_id: eventoId }]).select();
+      const { data } = await supabase.from('checklists').insert([{ ...form, itens, pdf_url: publicUrl, evento_id: id }]).select();
       if (data) { setReportId(data[0].id); setImgGeradaUrl(publicUrl); setEtapa('sucesso'); }
     } catch (e) { alert(e.message); }
     setLoading(false);
-  };
-
-  const shareWhatsApp = () => {
-    const link = `${window.location.origin}/menu-evento?id=${eventoId}&reportId=${reportId}`;
-    const texto = `Olá! O relatório do evento *${form.evento}* já está disponível.\n\n🔗 ${link}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_top');
   };
 
   return (
     <div className="min-h-screen bg-[#7e7f7f] p-4 flex flex-col items-center font-sans">
       {etapa === 'form' && (
         <div className="w-full max-w-md">
-          <Link href={`/menu-evento?id=${eventoId}`} className="text-white/50 mb-4 flex items-center gap-2 text-xs uppercase font-bold tracking-widest"><ArrowLeft size={16}/> Voltar</Link>
+          <Link href={`/menu-evento?id=${id}`} className="text-white/50 mb-4 flex items-center gap-2 text-xs uppercase font-bold tracking-widest"><ArrowLeft size={16}/> Voltar</Link>
           <div className="bg-white rounded-[30px] p-8 shadow-xl">
             <h2 className="text-center font-bold text-gray-500 mb-6 uppercase text-sm tracking-widest">Novo Checklist</h2>
             <div className="space-y-4">
@@ -106,8 +100,7 @@ export default function ChecklistPage() {
         <div className="bg-white rounded-[40px] p-10 text-center shadow-2xl max-w-xs mt-10">
           <div className="text-5xl mb-4">✨</div>
           <h2 className="text-gray-500 font-bold uppercase text-sm tracking-widest mb-6">Relatório Pronto!</h2>
-          <button onClick={shareWhatsApp} className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-bold text-xs uppercase flex items-center justify-center gap-2 mb-3"><Send size={16}/> WhatsApp</button>
-          <button onClick={() => router.push(`/menu-evento?id=${eventoId}`)} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase tracking-widest">Voltar ao Evento</button>
+          <button onClick={() => router.push(`/menu-evento?id=${id}`)} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase tracking-widest">Voltar ao Evento</button>
         </div>
       )}
     </div>
