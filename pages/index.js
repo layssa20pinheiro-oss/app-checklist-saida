@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import html2canvas from 'html2canvas';
-import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2, ExternalLink, Users, QrCode, ClipboardList } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2, ExternalLink, Users, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import Head from 'next/head';
 
@@ -91,7 +91,7 @@ export default function ChecklistApp() {
         <link rel="icon" href="/icon.png" />
       </Head>
 
-      {/* TELA DE MENU INICIAL */}
+      {/* TELA DE MENU INICIAL - ATUALIZADA */}
       {etapa === 'menu' && (
         <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
           <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[160px] mx-auto mb-10 mt-10" alt="Logo" />
@@ -108,16 +108,8 @@ export default function ChecklistApp() {
             <Link href="/lista" className="bg-white p-6 rounded-[30px] shadow-xl flex items-center gap-4 hover:scale-105 transition-all text-left group">
               <div className="bg-[#ded0b8] p-4 rounded-2xl text-white group-hover:bg-[#8da38d] transition-colors"><Users /></div>
               <div>
-                <h3 className="font-bold text-gray-700 uppercase tracking-widest text-sm">Lista & RSVP</h3>
-                <p className="text-[10px] text-gray-400 uppercase tracking-tighter italic">Confirmar Convidados</p>
-              </div>
-            </Link>
-
-            <Link href="/checkin" className="bg-white p-6 rounded-[30px] shadow-xl flex items-center gap-4 hover:scale-105 transition-all text-left group">
-              <div className="bg-[#ded0b8] p-4 rounded-2xl text-white group-hover:bg-[#8da38d] transition-colors"><QrCode /></div>
-              <div>
-                <h3 className="font-bold text-gray-700 uppercase tracking-widest text-sm">Scanner Entrada</h3>
-                <p className="text-[10px] text-gray-400 uppercase tracking-tighter italic">Leitura de QR Code</p>
+                <h3 className="font-bold text-gray-700 uppercase tracking-widest text-sm">Gestão de Convidados</h3>
+                <p className="text-[10px] text-gray-400 uppercase tracking-tighter italic">Lista, RSVP e Portaria</p>
               </div>
             </Link>
 
@@ -128,7 +120,7 @@ export default function ChecklistApp() {
         </div>
       )}
 
-      {/* RESTO DO CÓDIGO (FORMULÁRIO E RESUMO) */}
+      {/* --- FORMULÁRIO DO CHECKLIST --- */}
       {etapa === 'form' && (
         <div className="w-full max-w-md">
            <button onClick={() => setEtapa('menu')} className="text-white/50 mb-4 flex items-center gap-2 text-xs uppercase font-bold tracking-widest"> Voltar ao Menu</button>
