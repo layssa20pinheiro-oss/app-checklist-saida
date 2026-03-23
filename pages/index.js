@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import html2canvas from 'html2canvas';
-import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2, ExternalLink, Users, ClipboardList } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, Image as ImageIcon, Edit3, Loader2, ExternalLink, Users, ClipboardList, History } from 'lucide-react';
 import Link from 'next/link';
 import Head from 'next/head';
 
@@ -91,32 +91,40 @@ export default function ChecklistApp() {
         <link rel="icon" href="/icon.png" />
       </Head>
 
-      {/* TELA DE MENU INICIAL - ATUALIZADA */}
+      {/* TELA DE MENU INICIAL - DESIGN REFORMULADO */}
       {etapa === 'menu' && (
         <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
           <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[160px] mx-auto mb-10 mt-10" alt="Logo" />
           
-          <div className="grid grid-cols-1 gap-4">
-            <button onClick={() => setEtapa('form')} className="bg-white p-6 rounded-[30px] shadow-xl flex items-center gap-4 hover:scale-105 transition-all text-left group">
-              <div className="bg-[#ded0b8] p-4 rounded-2xl text-white group-hover:bg-[#8da38d] transition-colors"><ClipboardList /></div>
-              <div>
-                <h3 className="font-bold text-gray-700 uppercase tracking-widest text-sm">Novo Relatório</h3>
-                <p className="text-[10px] text-gray-400 uppercase tracking-tighter italic">Checklist de Saída</p>
-              </div>
-            </button>
+          <div className="space-y-6">
+            
+            {/* GRUPO DE RELATÓRIOS */}
+            <div className="bg-white rounded-[35px] p-2 shadow-xl">
+               <button onClick={() => setEtapa('form')} className="w-full p-6 flex items-center gap-4 text-left group">
+                  <div className="bg-[#ded0b8] p-4 rounded-2xl text-white group-hover:bg-[#8da38d] transition-colors shadow-inner"><ClipboardList /></div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-gray-700 uppercase tracking-widest text-sm">Novo Relatório</h3>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-tighter italic">Checklist de Saída</p>
+                  </div>
+               </button>
+               <Link href="/historico" className="flex items-center justify-center gap-2 py-4 border-t border-gray-50 text-[#ded0b8] hover:text-[#8da38d] transition-colors">
+                  <History size={16} />
+                  <span className="text-[10px] font-bold uppercase tracking-[2px]">Acessar Histórico</span>
+               </Link>
+            </div>
 
-            <Link href="/lista" className="bg-white p-6 rounded-[30px] shadow-xl flex items-center gap-4 hover:scale-105 transition-all text-left group">
-              <div className="bg-[#ded0b8] p-4 rounded-2xl text-white group-hover:bg-[#8da38d] transition-colors"><Users /></div>
+            {/* BOTÃO DE CONVIDADOS */}
+            <Link href="/lista" className="bg-white p-6 rounded-[35px] shadow-xl flex items-center gap-4 hover:scale-[1.02] transition-all text-left group">
+              <div className="bg-[#ded0b8] p-4 rounded-2xl text-white group-hover:bg-[#8da38d] transition-colors shadow-inner"><Users /></div>
               <div>
                 <h3 className="font-bold text-gray-700 uppercase tracking-widest text-sm">Gestão de Convidados</h3>
                 <p className="text-[10px] text-gray-400 uppercase tracking-tighter italic">Lista, RSVP e Portaria</p>
               </div>
             </Link>
 
-            <Link href="/historico" className="bg-white/10 p-4 rounded-2xl border border-white/20 text-white flex items-center justify-center gap-2 mt-4 hover:bg-white/20 transition-all">
-              <ExternalLink size={16} /> <span className="text-[10px] font-bold uppercase tracking-widest">Histórico de Relatórios</span>
-            </Link>
           </div>
+
+          <p className="text-center text-white/20 text-[9px] mt-12 uppercase tracking-[5px]">Cerimonial Elite v2.0</p>
         </div>
       )}
 
