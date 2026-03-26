@@ -72,13 +72,16 @@ export default function ChecklistApp() {
     <div className="min-h-screen bg-[#7e7f7f] p-4 flex flex-col items-center font-sans text-slate-800 pb-10">
       <Head>
         <title>Cerimonial Elite</title>
-        {/* URL com "cache bust" para forçar o WhatsApp a ler a imagem certa */}
-        <meta property="og:image" content="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png?v=2" />
+        {/* LINK ABSOLUTO DIRETO PARA A SUA LOGO CINZA NA PASTA PUBLIC */}
+        <meta property="og:image" content="https://app-checklist-saida.vercel.app/icon.png?v=novo_fundo_cinza" />
         <meta property="og:title" content="Cerimonial Elite" />
         <meta property="og:description" content="Relatório Digital de Pertences" />
       </Head>
       
-      <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mb-10 mt-6" />
+      {/* CORREÇÃO DA LOGO DUPLA: A logo do topo só aparece quando você está no formulário */}
+      {etapa === 'form' && (
+        <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mb-10 mt-6" alt="Logo Cerimonial" />
+      )}
 
       {etapa === 'form' && (
         <div className="w-full max-w-md">
@@ -109,7 +112,8 @@ export default function ChecklistApp() {
       {etapa === 'resumo' && (
         <div className="w-full flex flex-col items-center pb-24 animate-in fade-in duration-500">
           <div ref={areaCapturaRef} className="w-[380px] bg-[#7e7f7f] p-8 flex flex-col items-center">
-            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[130px] mb-8" />
+            {/* A LOGO EXCLUSIVA DO RELATÓRIO */}
+            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[130px] mb-8" alt="Logo" />
             <div className="w-full bg-white rounded-[30px] p-10 text-gray-700 text-xs shadow-sm leading-relaxed">
                 <h2 className="text-center font-bold text-lg mb-8 uppercase tracking-[8px] text-[#7e7f7f] border-b pb-4">Relatório</h2>
                 <div className="space-y-4">
@@ -117,7 +121,7 @@ export default function ChecklistApp() {
                     <p><strong>LOCAL:</strong> <span className="uppercase">{form.local}</span></p>
                     <div className="border-t pt-3 flex justify-between"><p><strong>PRESENTES:</strong> {form.presentes || '-'}</p><p><strong>CONVIDADOS:</strong> {form.convidados || '-'}</p></div>
                     <div className="border-t pt-3 font-bold">ITENS RECOLHIDOS:<ul className="mt-2 italic text-gray-400 pl-2 space-y-1">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul></div>
-                    <p><strong>OBS:</strong> <span className="italic">{form.obs || 'Nenhuma.'}</span></p>
+                    <p className="border-t pt-3"><strong>OBS:</strong> <span className="italic">{form.obs || 'Nenhuma.'}</span></p>
                     <p className="border-t pt-6 italic mt-4"><strong>ASSINATURA:</strong> <span className="uppercase">{form.responsavel}</span></p>
                 </div>
             </div>
