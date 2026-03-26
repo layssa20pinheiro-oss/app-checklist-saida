@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Plus, Calendar, ChevronRight, Loader2, Edit2, Trash2, Users } from 'lucide-react';
-import Link from 'next/link';
+import html2canvas from 'html2canvas';
+import { Camera, Plus, Trash2, Send, Loader2, ExternalLink, ArrowLeft } from 'lucide-react';
 import Head from 'next/head';
 
 const supabase = createClient(
@@ -9,115 +9,207 @@ const supabase = createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0aWNmd3FwdGx4a3BnYXdwendmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NDA2MTEsImV4cCI6MjA4OTQxNjYxMX0.vOmi-rKKxXuZ5SP7uZe81Cr0fKW_fWN4Hmuf90soijM'
 );
 
-export default function Home() {
-  const [reportPublico, setReportPublico] = useState(null);
-  const [eventos, setEventos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [novoEvento, setNovoEvento] = useState({ nome: '', data: '' });
-  const [isEditing, setIsEditing] = useState(false);
-  const [eventToEdit, setEventToEdit] = useState(null);
+export default function ChecklistApp() {
+  const [etapa, setEtapa] = useState('form'); 
+  const [loading, setLoading] = useState(false);
+  const [itens, setItens] = useState([]);
+  const [novoItem, setNovoItem] = useState('');
+  const [fotoPreview, setFotoPreview] = useState(null);
+  const [fotoBlob, setFotoBlob] = useState(null);
+  const [reportId, setReportId] = useState('');
+  const [isEditing, setIsEditing] = useState(false); // Adicionado o motor de edição
+  const [form, setForm] = useState({ evento: '', local: '', presentes: '', convidados: '', obs: '', responsavel: '' });
+  const areaCapturaRef = useRef();
 
+  // Função que entende o link com edit=true
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const reportId = params.get('id');
-    if (reportId) {
-      supabase.from('checklists').select('*').eq('id', reportId).single().then(({ data }) => {
-        setReportPublico(data);
+    const idRel = params.get('id');
+    const editMode = params.get('edit');
+
+    if (idRel) {
+      setLoading(true);
+      supabase.from('checklists').select('*').eq('id', idRel).single().then(({ data }) => {
+        if (data) {
+          setForm(data);
+          setItens(data.itens || []);
+          setReportId(data.id);
+          
+          if (editMode === 'true') {
+            setIsEditing(true);
+            setEtapa('form'); // Abre o formulário preenchido para editar
+          } else {
+            setFotoPreview(data.pdf_url); 
+            setEtapa('view'); // Abre a visão do cliente
+          }
+        }
         setLoading(false);
       });
-    } else {
-      carregarEventos();
     }
   }, []);
 
-  async function carregarEventos() {
+  const salvarRelatorio = async () => {
+    if (!form.evento || !form.responsavel) return alert("Preencha o evento e a assinatura.");
     setLoading(true);
-    const { data } = await supabase.from('eventos').select('*, convidados(id)').order('data', { ascending: true });
-    if (data) setEventos(data);
+    try {
+      const canvas = await html2canvas(areaCapturaRef.current, { scale: 2, backgroundColor: "#7e7f7f" });
+      const imagemBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      const nomeImg = `rel_${Date.now()}.png`;
+      await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
+      const urlRelatorio = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
+
+      let urlFotoPertences = form.foto_url || null;
+      if (fotoBlob) {
+        const nomeFoto = `pertences_${Date.now()}.jpg`;
+        await supabase.storage.from('fotos').upload(nomeFoto, fotoBlob);
+        urlFotoPertences = supabase.storage.from('fotos').getPublicUrl(nomeFoto).data.publicUrl;
+      }
+
+      const dadosParaSalvar = { 
+        ...form, itens, pdf_url: urlRelatorio, foto_url: urlFotoPertences 
+      };
+
+      let res;
+      if (isEditing) {
+        // Se estiver editando, ele ATUALIZA o relatório existente
+        res = await supabase.from('checklists').update(dadosParaSalvar).eq('id', reportId).select();
+      } else {
+        // Se for novo, ele CRIA um relatório novo
+        res = await supabase.from('checklists').insert([dadosParaSalvar]).select();
+      }
+
+      if (res.data) {
+        setReportId(res.data[0].id);
+        setEtapa('sucesso');
+      }
+    } catch (e) { alert("Erro ao salvar: " + e.message); }
     setLoading(false);
-  }
-
-  const salvarEvento = async () => {
-    if (!novoEvento.nome) return;
-    if (isEditing) {
-      await supabase.from('eventos').update(novoEvento).eq('id', eventToEdit.id);
-    } else {
-      await supabase.from('eventos').insert([novoEvento]);
-    }
-    setNovoEvento({ nome: '', data: '' });
-    setShowModal(false);
-    setIsEditing(false);
-    carregarEventos();
   };
 
-  const deletarEvento = async (id, e) => {
-    e.preventDefault();
-    if (confirm("Excluir este evento e TUDO o que há nele?")) {
-      await supabase.from('eventos').delete().eq('id', id);
-      carregarEventos();
-    }
+  const enviarWhatsApp = () => {
+    const link = `${window.location.origin}/?id=${reportId}`;
+    const texto = `Olá! Finalizamos a organização e conferência dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe. Aqui está o resumo de tudo o que guardamos:\n\n✨ *Seu Relatório Digital:* ${link}\n\nFoi um prazer fazer parte desse sonho.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_top');
   };
-
-  if (reportPublico) {
-    return (
-      <div className="min-h-screen bg-[#7e7f7f] p-6 flex flex-col items-center font-sans">
-        <Head><title>Relatório | Cerimonial Elite</title><link rel="icon" href="/icon.png" /></Head>
-        <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[150px] mb-8 mt-10" />
-        <div className="w-full max-w-md bg-white rounded-[35px] p-8 shadow-2xl text-gray-700">
-           <h2 className="text-[#7e7f7f] text-center font-bold text-xl mb-8 uppercase tracking-[5px]">Relatório Digital</h2>
-           <div className="space-y-4 text-sm border-t pt-6">
-              <p><strong>EVENTO:</strong> {reportPublico.evento}</p>
-              <p><strong>LOCAL:</strong> {reportPublico.local}</p>
-              <div className="border-t pt-4 font-bold uppercase text-[10px] text-gray-400">Itens Recolhidos:</div>
-              <ul className="space-y-1 italic text-gray-500">{reportPublico.itens?.map((it, i) => <li key={i}>• {it}</li>)}</ul>
-              <p className="border-t pt-4 italic"><strong>RESPONSÁVEL:</strong> {reportPublico.responsavel}</p>
-           </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-[#7e7f7f] p-6 font-sans">
-      <Head><title>Cerimonial Elite</title><link rel="icon" href="/icon.png" /></Head>
-      <div className="max-w-md mx-auto">
-        <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mx-auto mb-10 mt-6" />
-        <div className="flex justify-between items-center mb-6 text-white font-bold uppercase tracking-[3px] text-sm">
-          <h1>Meus Eventos</h1>
-          <button onClick={() => { setIsEditing(false); setNovoEvento({nome:'', data:''}); setShowModal(true); }} className="bg-[#ded0b8] p-2 rounded-xl shadow-lg"><Plus size={20}/></button>
-        </div>
-        <div className="space-y-4">
-          {eventos.map(ev => (
-            <div key={ev.id} className="relative">
-              <Link href={`/menu-evento?id=${ev.id}`} className="block bg-white p-5 rounded-[30px] shadow-xl hover:scale-[1.01] transition-all">
-                <h3 className="font-bold text-gray-700 uppercase text-xs pr-20">{ev.nome}</h3>
-                <div className="flex gap-3 mt-2 text-[9px] text-gray-400 font-bold uppercase">
-                   <span><Calendar size={10} className="inline mr-1"/>{ev.data ? new Date(ev.data).toLocaleDateString('pt-BR') : '--/--'}</span>
-                   <span className="text-[#8da38d]"><Users size={10} className="inline mr-1"/>{ev.convidados?.length || 0} Convidados</span>
-                </div>
-              </Link>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-1">
-                <button onClick={() => { setEventToEdit(ev); setNovoEvento({nome: ev.nome, data: ev.data}); setIsEditing(true); setShowModal(true); }} className="text-gray-200 hover:text-[#ded0b8] p-2 transition-colors"><Edit2 size={16}/></button>
-                <button onClick={(e) => deletarEvento(ev.id, e)} className="text-gray-200 hover:text-red-300 p-2 transition-colors"><Trash2 size={16}/></button>
+    <div className="min-h-screen bg-[#7e7f7f] p-4 flex flex-col items-center font-sans text-slate-800 pb-10">
+      <Head>
+        <title>Cerimonial Elite | Relatório</title>
+        <meta property="og:title" content="Cerimonial Elite" />
+        <meta property="og:description" content="Clique para ver o resumo dos seus pertences." />
+        <meta property="og:image" content="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" />
+      </Head>
+      
+      <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mb-10 mt-6" alt="Logo" />
+
+      {etapa === 'form' && (
+        <div className="w-full max-w-md animate-in fade-in duration-500">
+           <div className="flex justify-end mb-4">
+              <button onClick={() => window.location.href='/historico'} className="text-white/50 text-[10px] uppercase font-bold flex items-center gap-1 hover:text-white">
+                VER GERENCIAMENTO <ExternalLink size={12}/>
+              </button>
+           </div>
+           
+           <div className="bg-white rounded-[35px] p-8 shadow-2xl">
+            <h2 className="text-center font-bold text-gray-400 mb-8 uppercase text-xs tracking-[3px]">
+                {isEditing ? "Editar Checklist" : "Novo Checklist"}
+            </h2>
+            
+            <div className="space-y-4">
+              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
+              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
+              
+              <div className="flex gap-4">
+                <input className="w-full border-b p-2 outline-none text-xs" placeholder="Presentes" value={form.presentes} onChange={e=>setForm({...form, presentes: e.target.value})} />
+                <input className="w-full border-b p-2 outline-none text-xs" placeholder="Convidados" value={form.convidados} onChange={e=>setForm({...form, convidados: e.target.value})} />
               </div>
-            </div>
-          ))}
-        </div>
-        {showModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-            <div className="bg-white w-full max-w-xs rounded-[35px] p-8 shadow-2xl">
-              <h2 className="text-center font-bold text-gray-500 uppercase text-xs mb-6 tracking-widest">{isEditing ? "Editar Evento" : "Novo Evento"}</h2>
-              <input className="w-full border-b p-3 mb-4 outline-none text-sm" placeholder="Nome" value={novoEvento.nome} onChange={e=>setNovoEvento({...novoEvento, nome: e.target.value})} />
-              <input type="date" className="w-full border-b p-3 mb-8 outline-none text-sm text-gray-400" value={novoEvento.data} onChange={e=>setNovoEvento({...novoEvento, data: e.target.value})} />
-              <div className="flex gap-2">
-                <button onClick={()=>setShowModal(false)} className="flex-1 text-gray-400 font-bold text-[10px] uppercase">Sair</button>
-                <button onClick={salvarEvento} className="flex-2 bg-[#8da38d] text-white px-6 py-3 rounded-2xl font-bold uppercase text-[10px]">Salvar</button>
+
+              <div className="flex gap-2 pt-2">
+                <input className="flex-1 bg-gray-50 rounded-xl px-4 text-xs outline-none" placeholder="Adicionar item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} />
+                <button onClick={() => { if(novoItem.trim()){ setItens([...itens, novoItem.trim()]); setNovoItem(''); } }} className="bg-[#ded0b8] p-2 rounded-lg text-white shadow-sm active:scale-90"><Plus size={18}/></button>
               </div>
+              
+              <ul className="text-xs space-y-2 max-h-32 overflow-y-auto pt-2">
+                {itens.map((it, i) => <li key={i} className="bg-gray-50 p-3 rounded-xl flex justify-between italic text-gray-500">• {it} <Trash2 size={14} onClick={()=>setItens(itens.filter((_,idx)=>idx!==i))} className="text-red-200 cursor-pointer"/></li>)}
+              </ul>
+
+              <textarea className="w-full border rounded-2xl p-3 text-xs outline-none bg-gray-50/30" placeholder="Observações..." value={form.obs} onChange={e=>setForm({...form, obs: e.target.value})} rows={3}></textarea>
+              <input className="w-full border-b p-2 outline-none text-sm font-bold" placeholder="Sua Assinatura" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
+              
+              <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-100 rounded-2xl p-4 cursor-pointer hover:bg-gray-50 transition-all">
+                <Camera className="text-gray-300 mb-1" />
+                <span className="text-[10px] font-bold text-gray-300 uppercase">Foto dos Pertences</span>
+                <input type="file" accept="image/*" capture="camera" className="hidden" onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) { setFotoPreview(URL.createObjectURL(file)); setFotoBlob(file); }
+                }} />
+                {fotoPreview && etapa === 'form' && <img src={fotoPreview} className="mt-2 h-16 rounded-lg shadow-sm" alt="Preview" />}
+              </label>
+
+              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-white font-bold py-5 rounded-[20px] mt-4 uppercase text-xs tracking-widest shadow-lg active:scale-95 transition-all">Visualizar Esboço</button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {etapa === 'resumo' && (
+        <div className="w-full flex flex-col items-center pb-24 animate-in fade-in duration-500">
+          <div ref={areaCapturaRef} className="w-[380px] bg-[#7e7f7f] p-8 flex flex-col items-center text-gray-700">
+            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[130px] mb-8" />
+            <div className="w-full bg-white rounded-[30px] p-10 text-xs shadow-sm leading-relaxed">
+                <h2 className="text-center font-bold text-lg mb-8 uppercase tracking-[8px] text-[#7e7f7f] border-b pb-4">Relatório</h2>
+                <div className="space-y-4">
+                    <p><strong>EVENTO:</strong> <span className="uppercase">{form.evento}</span></p>
+                    <p><strong>LOCAL:</strong> <span className="uppercase">{form.local}</span></p>
+                    <div className="border-t pt-3 flex justify-between">
+                       <p><strong>PRESENTES:</strong> {form.presentes || '-'}</p>
+                       <p><strong>CONVIDADOS:</strong> {form.convidados || '-'}</p>
+                    </div>
+                    <div className="border-t pt-3 font-bold">ITENS RECOLHIDOS:
+                      <ul className="mt-2 italic text-gray-400 pl-2 space-y-1">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul>
+                    </div>
+                    <p className="border-t pt-3"><strong>OBS:</strong> <span className="italic">{form.obs || 'Nenhuma.'}</span></p>
+                    <p className="border-t pt-6 italic mt-4"><strong>ASSINATURA:</strong> <span className="uppercase">{form.responsavel}</span></p>
+                </div>
+            </div>
+          </div>
+          <div className="fixed bottom-0 bg-white/90 backdrop-blur-md p-5 flex gap-3 w-full max-w-md rounded-t-[40px] shadow-2xl border-t z-50">
+            <button onClick={() => setEtapa('form')} className="flex-1 bg-gray-50 py-5 rounded-2xl text-xs font-bold uppercase text-gray-400 tracking-widest">Ajustar</button>
+            <button onClick={salvarRelatorio} className="flex-2 bg-[#8da38d] text-white py-5 px-10 rounded-2xl text-xs font-bold uppercase shadow-lg active:scale-95 transition-all">
+              {loading ? <Loader2 className="animate-spin mx-auto"/> : "Confirmar e Enviar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {etapa === 'sucesso' && (
+        <div className="bg-white rounded-[45px] p-12 text-center shadow-2xl max-w-xs mt-20 animate-in zoom-in duration-500">
+          <div className="text-6xl mb-6">✨</div>
+          <h2 className="text-gray-500 font-bold uppercase text-sm tracking-[3px] mb-10 leading-tight">Relatório Digital Criado!</h2>
+          <button onClick={enviarWhatsApp} className="w-full bg-[#25D366] text-white py-5 rounded-2xl font-bold text-xs uppercase flex items-center justify-center gap-3 mb-4 shadow-xl active:scale-95">
+            <Send size={18}/> Enviar no WhatsApp
+          </button>
+          <button onClick={() => window.location.href='/'} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase tracking-widest hover:text-gray-600">Novo Checklist</button>
+        </div>
+      )}
+
+      {etapa === 'view' && (
+        <div className="w-full flex flex-col items-center mt-10 animate-in fade-in duration-500">
+           <div className="w-[380px] bg-white rounded-[35px] p-8 shadow-2xl text-gray-700">
+              <h2 className="text-[#7e7f7f] text-center font-bold text-xl mb-8 uppercase tracking-[5px]">Relatório Digital</h2>
+              <div className="space-y-4 text-sm border-t pt-6">
+                 <p><strong>EVENTO:</strong> <span className="uppercase">{form.evento}</span></p>
+                 <p><strong>LOCAL:</strong> <span className="uppercase">{form.local}</span></p>
+                 <div className="border-t pt-4 font-bold uppercase text-[10px] text-gray-400">Itens Recolhidos:</div>
+                 <ul className="space-y-1 italic text-gray-500">{itens?.map((it, i) => <li key={i}>• {it}</li>)}</ul>
+                 <p className="border-t pt-4 italic"><strong>RESPONSÁVEL:</strong> {form.responsavel}</p>
+                 {form.foto_url && <img src={form.foto_url} className="mt-4 rounded-xl w-full border" alt="Foto pertences" />}
+              </div>
+           </div>
+           <button onClick={() => window.location.href='/'} className="mt-10 bg-white/10 text-white px-10 py-4 rounded-2xl text-[10px] uppercase font-bold border border-white/20 tracking-widest hover:bg-white/20">Acessar Meu Painel</button>
+        </div>
+      )}
     </div>
   );
 }
