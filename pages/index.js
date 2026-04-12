@@ -68,7 +68,6 @@ export default function ChecklistApp() {
     if (!form.evento || !form.responsavel) return alert("Preencha o evento e a assinatura.");
     setLoading(true);
     try {
-      // A BLINDAGEM MÁXIMA: Evitando erros do banco de dados!
       const dadosParaSalvar = {
         evento: form.evento,
         local: form.local,
@@ -77,13 +76,19 @@ export default function ChecklistApp() {
         obs: form.observacoes,
         itens: itens,
         foto_url: fotoUrl,
-        pdf_url: 'link-pendente' // Desligamos o print pesado por segurança!
+        pdf_url: 'link-pendente'
       };
 
-      // SEGREDO PARA MATAR O ERRO 22P02:
-      // Só envia presentes e convidados se você realmente tiver digitado algo neles
-      if (form.presentes && form.presentes !== '') dadosParaSalvar.presentes = form.presentes;
-      if (form.convidados && form.convidados !== '') dadosParaSalvar.convidados = form.convidados;
+      // O FILTRO MÁGICO: Transforma traços e letras em vazio para não quebrar o banco!
+      if (form.presentes) {
+          const numPresentes = form.presentes.toString().replace(/\D/g, ''); 
+          if (numPresentes !== '') dadosParaSalvar.presentes = parseInt(numPresentes);
+      }
+
+      if (form.convidados) {
+          const numConvidados = form.convidados.toString().replace(/\D/g, ''); 
+          if (numConvidados !== '') dadosParaSalvar.convidados = parseInt(numConvidados);
+      }
 
       let res = isEditing
         ? await supabase.from('checklists').update(dadosParaSalvar).eq('id', reportId).select()
@@ -132,8 +137,8 @@ export default function ChecklistApp() {
               <input className="w-full border-b p-2 outline-none text-sm" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
               <input className="w-full border-b p-2 outline-none text-sm" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
               <div className="flex gap-4">
-                  <input className="w-full border-b p-2 outline-none text-xs" placeholder="Presentes" value={form.presentes} onChange={e=>setForm({...form, presentes: e.target.value})} />
-                  <input className="w-full border-b p-2 outline-none text-xs" placeholder="Convidados" value={form.convidados} onChange={e=>setForm({...form, convidados: e.target.value})} />
+                  <input className="w-full border-b p-2 outline-none text-xs" placeholder="Presentes (só números)" value={form.presentes} onChange={e=>setForm({...form, presentes: e.target.value})} />
+                  <input className="w-full border-b p-2 outline-none text-xs" placeholder="Convidados (só números)" value={form.convidados} onChange={e=>setForm({...form, convidados: e.target.value})} />
               </div>
               <div className="flex gap-2 pt-2">
                   <input className="flex-1 bg-gray-50 rounded-xl px-4 text-xs outline-none" placeholder="Adicionar item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (setItens([...itens, novoItem]), setNovoItem(''))} />
