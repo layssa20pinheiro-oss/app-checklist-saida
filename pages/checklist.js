@@ -56,10 +56,15 @@ export default function ChecklistPage() {
     setLoading(false);
   };
 
-  const enviarWhatsApp = () => {
+const enviarWhatsApp = () => {
     const linkApp = `${window.location.origin}/?id=${finalReportId}`;
     const texto = `Olá! Finalizamos a organização dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe.\n\n✨ *Seu Relatório Digital:* ${linkApp}\n\nFoi um prazer fazer parte desse sonho.`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_top');
+    
+    // Rota oficial e mais segura da API do WhatsApp
+    const urlWhats = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+    
+    // Abre em uma nova aba (_blank), o que força o celular a abrir o aplicativo do WhatsApp
+    window.open(urlWhats, '_blank');
   };
 
   return (
