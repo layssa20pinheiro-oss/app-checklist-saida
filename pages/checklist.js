@@ -36,26 +36,54 @@ export default function ChecklistPage() {
   const salvarETerminar = async () => {
     setLoading(true);
     try {
-      const canvas = await html2canvas(areaCapturaRef.current, { scale: 2, backgroundColor: "#7e7f7f" });
+      // O "crachá de segurança" (useCORS: true) foi adicionado aqui para permitir o print das fotos!
+      const canvas = await html2canvas(areaCapturaRef.current, { 
+          scale: 2, 
+          backgroundColor: "#7e7f7f",
+          useCORS: true 
+      });
+      
       const imagemBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
       const nomeImg = `rel_${Date.now()}.png`;
-      await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
+      
+      const { error: uploadError } = await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
+      if (uploadError) {
+          alert("Erro ao salvar a imagem no banco: " + uploadError.message);
+          setLoading(false);
+          return;
+      }
+
       const urlImg = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
 
-      const dados = { ...form, itens, pdf_url: urlImg, evento_id: id };
+      // Monta os dados
+      const dados = { 
+          ...form, 
+          itens, 
+          pdf_url: urlImg, 
+          foto_url: fotoUrl,
+          evento_id: id 
+      };
       
       let res;
-      if (reportId) { res = await supabase.from('checklists').update(dados).eq('id', reportId).select(); }
-      else { res = await supabase.from('checklists').insert([dados]).select(); }
-
-      if (res.data) {
-        setFinalReportId(res.data[0].id);
-        setEtapa('sucesso');
+      if (reportId) { 
+          res = await supabase.from('checklists').update(dados).eq('id', reportId).select(); 
+      } else { 
+          res = await supabase.from('checklists').insert([dados]).select(); 
       }
-    } catch (e) { alert(e.message); }
+
+      if (res.error) {
+          alert("Erro ao salvar relatório: " + res.error.message);
+      } else if (res.data) {
+          setFinalReportId(res.data[0].id);
+          setEtapa('sucesso');
+      }
+    } catch (e) { 
+        alert("Ocorreu um erro no sistema: " + e.message); 
+    }
+    
+    // Essa linha garante que a rodinha de carregamento sempre pare, mesmo se der erro!
     setLoading(false);
   };
-
 const enviarWhatsApp = () => {
     const linkApp = `${window.location.origin}/?id=${finalReportId}`;
     const texto = `Olá! Finalizamos a organização dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe.\n\n✨ *Seu Relatório Digital:* ${linkApp}\n\nFoi um prazer fazer parte desse sonho.`;
