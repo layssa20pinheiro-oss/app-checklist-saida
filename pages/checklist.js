@@ -1,8 +1,7 @@
 import { useRouter } from 'next/router';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import html2canvas from 'html2canvas';
-import { Camera, Plus, Trash2, Send, Loader2, ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Plus, Camera, ExternalLink, Trash2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import Head from 'next/head';
 
@@ -11,213 +10,201 @@ const supabase = createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0aWNmd3FwdGx4a3BnYXdwendmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NDA2MTEsImV4cCI6MjA4OTQxNjYxMX0.vOmi-rKKxXuZ5SP7uZe81Cr0fKW_fWN4Hmuf90soijM'
 );
 
-export default function ChecklistPage() {
+export default function Checklist() {
   const router = useRouter();
-  const { id, reportId } = router.query;
-
-  const [etapa, setEtapa] = useState('form');
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [itens, setItens] = useState([]);
+  const { id } = router.query;
+  
+  const [eventoNome, setEventoNome] = useState('');
+  const [local, setLocal] = useState('');
+  const [presentes, setPresentes] = useState('');
+  const [convidados, setConvidados] = useState('');
   const [novoItem, setNovoItem] = useState('');
+  const [itens, setItens] = useState([]);
+  const [observacoes, setObservacoes] = useState('');
+  const [assinatura, setAssinatura] = useState('');
   const [fotoUrl, setFotoUrl] = useState('');
-  const [finalReportId, setFinalReportId] = useState('');
-  
-  const [form, setForm] = useState({ 
-    evento: '', 
-    local: '', 
-    responsavel: '',
-    presentes: '',
-    convidados: '',
-    observacoes: ''
-  });
-  
-  const areaCapturaRef = useRef();
+  const [uploading, setUploading] = useState(false);
+  const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    if (reportId) {
-      supabase.from('checklists').select('*').eq('id', reportId).single().then(({ data }) => {
-        if (data) {
-          setForm({ 
-            evento: data.evento || '', 
-            local: data.local || '', 
-            responsavel: data.responsavel || '',
-            presentes: data.presentes || '',
-            convidados: data.convidados || '',
-            observacoes: data.observacoes || ''
-          });
-          setItens(data.itens || []);
-          setFotoUrl(data.foto_url || '');
-        }
+    if (id) {
+      supabase.from('eventos').select('*').eq('id', id).single().then(({ data }) => {
+        if (data) setEventoNome(data.nome);
       });
-    } else if (id) {
-        supabase.from('eventos').select('nome').eq('id', id).single().then(({ data }) => {
-            if (data) setForm(prev => ({ ...prev, evento: data.nome }));
-        });
     }
-  }, [reportId, id]);
+  }, [id]);
+
+  const adicionarItem = () => {
+    if (novoItem.trim() !== '') {
+      setItens([...itens, novoItem]);
+      setNovoItem('');
+    }
+  };
+
+  const removerItem = (index) => {
+    setItens(itens.filter((_, i) => i !== index));
+  };
 
   const handleFotoUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
     setUploading(true);
-    try {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `pertences/${fileName}`;
-        const { error: uploadError } = await supabase.storage.from('fotos').upload(filePath, file);
-        if (!uploadError) {
-          const { data } = supabase.storage.from('fotos').getPublicUrl(filePath);
-          setFotoUrl(data.publicUrl);
-        }
-    } catch (err) { console.error(err); }
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `pertences/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage.from('fotos').upload(filePath, file);
+    if (!uploadError) {
+      const { data } = supabase.storage.from('fotos').getPublicUrl(filePath);
+      setFotoUrl(data.publicUrl);
+    } else {
+      alert("Erro ao enviar foto: " + uploadError.message);
+    }
     setUploading(false);
   };
 
-  const salvarETerminar = async () => {
-    setLoading(true);
-    try {
-      // 1. SALVA OS DADOS PRIMEIRO E GARANTE O SUCESSO
-      const dadosParaSalvar = { 
-          ...form, 
-          itens, 
-          foto_url: fotoUrl,
-          evento_id: id 
-      };
-      
-      let res;
-      if (reportId) { 
-          res = await supabase.from('checklists').update(dadosParaSalvar).eq('id', reportId).select(); 
-      } else { 
-          res = await supabase.from('checklists').insert([dadosParaSalvar]).select(); 
-      }
-
-      if (res.error) throw new Error(res.error.message);
-      
-      const savedId = res.data[0].id;
-      setFinalReportId(savedId);
-
-      // 2. TENTA GERAR O PRINT (Se o celular travar, ele pula isso e não te deixa na mão)
-      try {
-        const gerarPrint = async () => {
-            const canvas = await html2canvas(areaCapturaRef.current, { 
-                scale: 1.5, // Mais leve para o celular não travar
-                backgroundColor: "#7e7f7f",
-                useCORS: true,
-                logging: false
-            });
-            const imagemBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-            const nomeImg = `rel_${Date.now()}.png`;
-            await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
-            const urlImg = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
-            await supabase.from('checklists').update({ pdf_url: urlImg }).eq('id', savedId);
-        };
-
-        // Força a tentar por no máximo 5 segundos. Se travar, ele ignora e continua!
-        await Promise.race([
-            gerarPrint(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
-        ]);
-      } catch (imgErr) {
-        console.log("Ignorou erro de print para destravar o app");
-      }
-
-      // FORÇA A TELA DE SUCESSO DE QUALQUER JEITO!
-      setEtapa('sucesso');
-    } catch (e) { 
-        alert("Erro na internet: " + e.message);
-        // Em último caso, libera o botão do zap mesmo com erro
-        setEtapa('sucesso');
+  const salvarEsboco = async () => {
+    if (!eventoNome || !assinatura) {
+      return alert("Preencha pelo menos o nome do Evento e a sua Assinatura.");
     }
-    setLoading(false);
-  };
+    
+    setSalvando(true);
+    
+    const payload = {
+      evento_id: id,
+      evento: eventoNome,
+      local: local,
+      itens: itens,
+      responsavel: assinatura,
+      presentes: presentes,
+      convidados: convidados,
+      observacoes: observacoes,
+      foto_url: fotoUrl
+    };
 
-  const enviarWhatsApp = () => {
-    // Garante que se o ID falhou, tenta puxar o da URL
-    const idParaLink = finalReportId || reportId; 
-    const linkApp = `${window.location.origin}/?id=${idParaLink}`;
-    const texto = `Olá! Finalizamos a organização dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe.\n\n✨ *Seu Relatório Digital:* ${linkApp}\n\nFoi um prazer fazer parte desse sonho.`;
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, '_blank');
+    const { data, error } = await supabase.from('checklists').insert([payload]).select();
+    
+    setSalvando(false);
+    
+    if (error) {
+      alert("Erro ao salvar: " + error.message);
+    } else {
+      if (data && data[0]) {
+         // Redireciona para visualizar o relatório gerado
+         router.push(`/?id=${data[0].id}`);
+      } else {
+         router.push(`/menu-evento?id=${id}`);
+      }
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#7e7f7f] p-4 flex flex-col items-center font-sans">
-      <Head><title>Checklist | Cerimonial Elite</title></Head>
+    <div className="min-h-screen bg-[#7e7f7f] p-4 font-sans flex flex-col items-center pb-24">
+      <Head><title>Novo Checklist | Cerimonial Elite</title></Head>
       
-      {etapa === 'form' && (
-        <div className="w-full max-w-md animate-in fade-in">
-          <Link href={`/menu-evento?id=${id}`} className="text-white/50 mb-4 flex items-center gap-2 text-xs uppercase font-bold tracking-widest"><ArrowLeft size={16}/> Voltar</Link>
-          <div className="flex flex-col items-center w-full mb-6 text-center">
-            {/* CROSSORIGIN ADICIONADO PARA DESTRAVAR O IPHONE */}
-            <img crossOrigin="anonymous" src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="h-16 mb-4" />
-            <div className="w-full flex justify-end pr-2">
-               <Link href={`/historico?id=${id}`} className="text-white/80 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">VER GERENCIAMENTO <ExternalLink size={12}/></Link>
+      <div className="w-full max-w-md animate-in fade-in duration-500 mt-4">
+        
+        {/* CABEÇALHO */}
+        <div className="flex items-center justify-between mb-2">
+          <Link href={`/menu-evento?id=${id}`} className="flex items-center gap-2 text-white hover:text-white/80 transition-all text-[10px] font-bold uppercase tracking-widest">
+            <ArrowLeft size={16}/> Voltar
+          </Link>
+        </div>
+        
+        {/* LOGO */}
+        <div className="flex justify-center mb-6">
+            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="h-16 opacity-90" alt="Logo" />
+        </div>
+
+        {/* LINK PARA HISTÓRICO (O SEU TOQUE DE GÊNIO AQUI) */}
+        <div className="flex justify-end mb-3 pr-2">
+           <Link href={`/historico?id=${id}`} className="flex items-center gap-1 text-white/80 hover:text-white text-[9px] font-bold uppercase tracking-widest transition-all">
+             Acessar Histórico <ExternalLink size={12}/>
+           </Link>
+        </div>
+
+        {/* CARTÃO BRANCO PRINCIPAL */}
+        <div className="bg-white rounded-[35px] p-8 shadow-2xl">
+          
+          <h2 className="text-center font-bold text-gray-400 uppercase tracking-[4px] text-[11px] mb-8 mt-2">
+            Novo Checklist
+          </h2>
+
+          <div className="space-y-6">
+            
+            {/* EVENTO E LOCAL */}
+            <div>
+              <input className="w-full border-b border-gray-200 py-2 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Evento" value={eventoNome} onChange={e => setEventoNome(e.target.value)} />
             </div>
-          </div>
-          <div className="bg-white rounded-[30px] p-8 shadow-xl">
-            <h2 className="text-center font-bold text-gray-500 mb-8 uppercase text-xs tracking-widest">Novo Checklist</h2>
-            <div className="space-y-5">
-              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
-              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
-              <div className="flex gap-4">
-                  <input className="w-full border-b p-2 outline-none text-sm" placeholder="Presentes" value={form.presentes} onChange={e=>setForm({...form, presentes: e.target.value})} />
-                  <input className="w-full border-b p-2 outline-none text-sm" placeholder="Convidados" value={form.convidados} onChange={e=>setForm({...form, convidados: e.target.value})} />
-              </div>
-              <div className="pt-2">
-                <div className="flex gap-2">
-                  <input className="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-xs outline-none" placeholder="Adicionar Item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (setItens([...itens, novoItem]), setNovoItem(''))} />
-                  <button onClick={() => { if(novoItem){ setItens([...itens, novoItem]); setNovoItem(''); } }} className="bg-[#ded0b8] p-2 rounded-xl text-white"><Plus size={16}/></button>
-                </div>
-                <ul className="text-xs space-y-1 mt-3">
-                  {itens.map((it, i) => <li key={i} className="bg-gray-50 p-3 rounded-xl flex justify-between items-center italic text-gray-400">• {it} <Trash2 size={14} onClick={()=>setItens(itens.filter((_,idx)=>idx!==i))} className="text-red-200"/></li>)}
-                </ul>
-              </div>
-              <textarea className="w-full border rounded-2xl p-4 text-sm min-h-[80px]" placeholder="Observações..." value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})}></textarea>
-              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Sua Assinatura" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
-              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-2xl cursor-pointer overflow-hidden">
-                {uploading ? <Loader2 className="animate-spin"/> : fotoUrl ? <img crossOrigin="anonymous" src={fotoUrl} className="h-full w-full object-cover"/> : <div className="text-gray-300 flex flex-col items-center"><Camera size={24}/><span className="text-[9px] uppercase font-bold tracking-widest">Foto dos Pertences</span></div>}
+            
+            <div>
+              <input className="w-full border-b border-gray-200 py-2 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Local" value={local} onChange={e => setLocal(e.target.value)} />
+            </div>
+
+            {/* PRESENTES E CONVIDADOS LADO A LADO */}
+            <div className="flex gap-4">
+              <input className="w-full border-b border-gray-200 py-2 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Presentes" value={presentes} onChange={e => setPresentes(e.target.value)} />
+              <input className="w-full border-b border-gray-200 py-2 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Convidados" value={convidados} onChange={e => setConvidados(e.target.value)} />
+            </div>
+
+            {/* ADICIONAR ITEM */}
+            <div className="pt-2">
+               <div className="flex items-center border border-gray-200 rounded-2xl p-1 bg-gray-50/50 focus-within:border-[#ded0b8] transition-colors">
+                 <input className="flex-1 bg-transparent px-3 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Adicionar item..." value={novoItem} onChange={e => setNovoItem(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && adicionarItem()} />
+                 <button onClick={adicionarItem} className="bg-[#ded0b8] text-white p-2.5 rounded-xl shadow-sm hover:scale-105 transition-all"><Plus size={16}/></button>
+               </div>
+               
+               {/* LISTA DE ITENS INSERIDOS */}
+               {itens.length > 0 && (
+                 <ul className="mt-3 space-y-2 px-1">
+                   {itens.map((item, idx) => (
+                     <li key={idx} className="flex justify-between items-center text-[11px] font-medium text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                       <span className="flex-1">• {item}</span>
+                       <button onClick={() => removerItem(idx)} className="text-gray-300 hover:text-red-400 px-2 transition-colors"><Trash2 size={14}/></button>
+                     </li>
+                   ))}
+                 </ul>
+               )}
+            </div>
+
+            {/* OBSERVAÇÕES */}
+            <div className="pt-2">
+              <textarea className="w-full border border-gray-200 rounded-3xl p-4 outline-none text-sm text-gray-600 placeholder:text-gray-400 min-h-[100px] resize-none focus:border-[#ded0b8] transition-colors" placeholder="Observações..." value={observacoes} onChange={e => setObservacoes(e.target.value)}></textarea>
+            </div>
+
+            {/* SUA ASSINATURA */}
+            <div className="pt-2 pb-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Sua Assinatura</label>
+              <input className="w-full border-b border-gray-200 py-2 outline-none text-sm text-gray-600" value={assinatura} onChange={e => setAssinatura(e.target.value)} />
+            </div>
+
+            {/* FOTO DOS PERTENCES */}
+            <div className="pt-2 pb-4">
+              <label className="relative flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-200 rounded-[25px] cursor-pointer hover:bg-gray-50 transition-colors overflow-hidden group">
+                {uploading ? (
+                   <div className="flex flex-col items-center text-gray-400 gap-2"><Loader2 className="animate-spin" size={20}/><span className="text-[9px] uppercase font-bold tracking-widest">Enviando...</span></div>
+                ) : fotoUrl ? (
+                   <img src={fotoUrl} className="w-full h-full object-cover opacity-90" />
+                ) : (
+                   <div className="flex flex-col items-center text-gray-300 group-hover:text-[#ded0b8] transition-colors gap-2">
+                     <Camera size={26} />
+                     <span className="text-[9px] uppercase font-bold tracking-widest">Foto dos Pertences</span>
+                   </div>
+                )}
                 <input type="file" className="hidden" accept="image/*" onChange={handleFotoUpload} />
               </label>
-              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl mt-4 uppercase text-xs tracking-widest shadow-lg">Visualizar Esboço</button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {etapa === 'resumo' && (
-        <div className="w-full flex flex-col items-center pb-24 animate-in fade-in">
-          <div ref={areaCapturaRef} className="w-[380px] bg-[#7e7f7f] p-6 flex flex-col items-center">
-            {/* CROSSORIGIN ADICIONADO AQUI TAMBÉM */}
-            <img crossOrigin="anonymous" src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[120px] mb-6" />
-            <div className="w-full bg-white rounded-[25px] p-8 text-gray-700 text-xs shadow-sm">
-                <h2 className="text-center font-bold text-lg mb-6 uppercase tracking-[5px] text-[#7e7f7f]">Relatório</h2>
-                <p className="border-b pb-2 mb-2 uppercase"><strong>EVENTO:</strong> {form.evento}</p>
-                <p className="border-b pb-2 mb-2 uppercase"><strong>LOCAL:</strong> {form.local}</p>
-                <div className="mt-4 font-bold text-gray-400">ITENS RECOLHIDOS:</div>
-                <ul className="italic text-gray-400 mb-4 pl-2 space-y-1">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul>
-                {fotoUrl && <img crossOrigin="anonymous" src={fotoUrl} className="w-full rounded-xl mb-4" />}
-                <p className="border-t pt-4"><strong>RESPONSÁVEL:</strong> {form.responsavel}</p>
-            </div>
-          </div>
-          <div className="fixed bottom-0 bg-white p-4 flex gap-2 w-full max-w-md rounded-t-3xl shadow-2xl">
-            <button onClick={() => setEtapa('form')} className="flex-1 bg-gray-50 py-4 rounded-2xl text-xs font-bold uppercase text-gray-400">Ajustar</button>
-            <button onClick={salvarETerminar} className="flex-2 bg-[#8da38d] text-white py-4 px-8 rounded-2xl text-xs font-bold uppercase shadow-lg flex justify-center items-center">
-                {loading ? <Loader2 className="animate-spin"/> : "Confirmar e Enviar"}
+            {/* BOTAO VISUALIZAR ESBOÇO */}
+            <button onClick={salvarEsboco} disabled={salvando || uploading} className="w-full bg-[#ded0b8] text-white py-4 rounded-2xl font-bold uppercase tracking-[2px] text-[11px] shadow-lg active:scale-95 transition-all flex justify-center items-center gap-2">
+               {salvando ? <Loader2 className="animate-spin" size={16}/> : null}
+               {salvando ? "Salvando..." : "Visualizar Esboço"}
             </button>
+
           </div>
         </div>
-      )}
-
-      {etapa === 'sucesso' && (
-        <div className="bg-white rounded-[40px] p-10 text-center shadow-2xl max-w-xs mt-20">
-          <div className="text-5xl mb-4">✨</div>
-          <h2 className="text-gray-500 font-bold uppercase text-sm mb-10">Relatório Criado!</h2>
-          <button onClick={enviarWhatsApp} className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-bold text-xs uppercase flex items-center justify-center gap-2 mb-4 shadow-lg">
-            <Send size={16}/> Enviar no WhatsApp
-          </button>
-          <button onClick={() => router.push(`/menu-evento?id=${id}`)} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase">Voltar ao Menu</button>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
