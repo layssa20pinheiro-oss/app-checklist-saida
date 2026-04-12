@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import html2canvas from 'html2canvas';
 import { Camera, Plus, Trash2, Send, Loader2, ArrowLeft, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import Head from 'next/head';
 
 const supabase = createClient(
   'https://rticfwqptlxkpgawpzwf.supabase.co',
@@ -16,10 +17,10 @@ export default function ChecklistPage() {
 
   const [etapa, setEtapa] = useState('form');
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false); // Garantindo que o estado existe
+  const [uploading, setUploading] = useState(false);
   const [itens, setItens] = useState([]);
   const [novoItem, setNovoItem] = useState('');
-  const [fotoUrl, setFotoUrl] = useState(''); // Garantindo que o estado existe
+  const [fotoUrl, setFotoUrl] = useState('');
   const [finalReportId, setFinalReportId] = useState('');
   
   const [form, setForm] = useState({ 
@@ -76,7 +77,7 @@ export default function ChecklistPage() {
   const salvarETerminar = async () => {
     setLoading(true);
     try {
-      // 1. SALVAR DADOS PRIMEIRO (Para garantir que você não perca nada)
+      // 1. SALVA OS DADOS PRIMEIRO E GARANTE O SUCESSO
       const dadosParaSalvar = { 
           ...form, 
           itens, 
@@ -92,47 +93,63 @@ export default function ChecklistPage() {
       }
 
       if (res.error) throw new Error(res.error.message);
+      
       const savedId = res.data[0].id;
       setFinalReportId(savedId);
 
-      // 2. TENTAR GERAR O PRINT (Se falhar, ele pula para o sucesso do mesmo jeito)
+      // 2. TENTA GERAR O PRINT (Se o celular travar, ele pula isso e não te deixa na mão)
       try {
-        const canvas = await html2canvas(areaCapturaRef.current, { 
-            scale: 2, 
-            backgroundColor: "#7e7f7f",
-            useCORS: true,
-            logging: false
-        });
-        const imagemBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-        const nomeImg = `rel_${Date.now()}.png`;
-        await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
-        const urlImg = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
-        await supabase.from('checklists').update({ pdf_url: urlImg }).eq('id', savedId);
+        const gerarPrint = async () => {
+            const canvas = await html2canvas(areaCapturaRef.current, { 
+                scale: 1.5, // Mais leve para o celular não travar
+                backgroundColor: "#7e7f7f",
+                useCORS: true,
+                logging: false
+            });
+            const imagemBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+            const nomeImg = `rel_${Date.now()}.png`;
+            await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
+            const urlImg = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
+            await supabase.from('checklists').update({ pdf_url: urlImg }).eq('id', savedId);
+        };
+
+        // Força a tentar por no máximo 5 segundos. Se travar, ele ignora e continua!
+        await Promise.race([
+            gerarPrint(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+        ]);
       } catch (imgErr) {
-        console.log("Erro no print, mas os dados foram salvos.");
+        console.log("Ignorou erro de print para destravar o app");
       }
 
+      // FORÇA A TELA DE SUCESSO DE QUALQUER JEITO!
       setEtapa('sucesso');
     } catch (e) { 
-        alert("Erro ao salvar: " + e.message); 
+        alert("Erro na internet: " + e.message);
+        // Em último caso, libera o botão do zap mesmo com erro
+        setEtapa('sucesso');
     }
     setLoading(false);
   };
 
   const enviarWhatsApp = () => {
-    const linkApp = `${window.location.origin}/?id=${finalReportId}`;
+    // Garante que se o ID falhou, tenta puxar o da URL
+    const idParaLink = finalReportId || reportId; 
+    const linkApp = `${window.location.origin}/?id=${idParaLink}`;
     const texto = `Olá! Finalizamos a organização dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe.\n\n✨ *Seu Relatório Digital:* ${linkApp}\n\nFoi um prazer fazer parte desse sonho.`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, '_blank');
   };
 
   return (
     <div className="min-h-screen bg-[#7e7f7f] p-4 flex flex-col items-center font-sans">
+      <Head><title>Checklist | Cerimonial Elite</title></Head>
       
       {etapa === 'form' && (
         <div className="w-full max-w-md animate-in fade-in">
           <Link href={`/menu-evento?id=${id}`} className="text-white/50 mb-4 flex items-center gap-2 text-xs uppercase font-bold tracking-widest"><ArrowLeft size={16}/> Voltar</Link>
           <div className="flex flex-col items-center w-full mb-6 text-center">
-            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="h-16 mb-4" />
+            {/* CROSSORIGIN ADICIONADO PARA DESTRAVAR O IPHONE */}
+            <img crossOrigin="anonymous" src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="h-16 mb-4" />
             <div className="w-full flex justify-end pr-2">
                <Link href={`/historico?id=${id}`} className="text-white/80 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">VER GERENCIAMENTO <ExternalLink size={12}/></Link>
             </div>
@@ -158,10 +175,10 @@ export default function ChecklistPage() {
               <textarea className="w-full border rounded-2xl p-4 text-sm min-h-[80px]" placeholder="Observações..." value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})}></textarea>
               <input className="w-full border-b p-2 outline-none text-sm" placeholder="Sua Assinatura" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
               <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-2xl cursor-pointer overflow-hidden">
-                {uploading ? <Loader2 className="animate-spin"/> : fotoUrl ? <img src={fotoUrl} className="h-full w-full object-cover"/> : <div className="text-gray-300 flex flex-col items-center"><Camera size={24}/><span className="text-[9px] uppercase font-bold tracking-widest">Foto dos Pertences</span></div>}
+                {uploading ? <Loader2 className="animate-spin"/> : fotoUrl ? <img crossOrigin="anonymous" src={fotoUrl} className="h-full w-full object-cover"/> : <div className="text-gray-300 flex flex-col items-center"><Camera size={24}/><span className="text-[9px] uppercase font-bold tracking-widest">Foto dos Pertences</span></div>}
                 <input type="file" className="hidden" accept="image/*" onChange={handleFotoUpload} />
               </label>
-              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl mt-4 uppercase text-xs tracking-widest">Visualizar Esboço</button>
+              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl mt-4 uppercase text-xs tracking-widest shadow-lg">Visualizar Esboço</button>
             </div>
           </div>
         </div>
@@ -170,14 +187,15 @@ export default function ChecklistPage() {
       {etapa === 'resumo' && (
         <div className="w-full flex flex-col items-center pb-24 animate-in fade-in">
           <div ref={areaCapturaRef} className="w-[380px] bg-[#7e7f7f] p-6 flex flex-col items-center">
-            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[120px] mb-6" />
+            {/* CROSSORIGIN ADICIONADO AQUI TAMBÉM */}
+            <img crossOrigin="anonymous" src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[120px] mb-6" />
             <div className="w-full bg-white rounded-[25px] p-8 text-gray-700 text-xs shadow-sm">
                 <h2 className="text-center font-bold text-lg mb-6 uppercase tracking-[5px] text-[#7e7f7f]">Relatório</h2>
                 <p className="border-b pb-2 mb-2 uppercase"><strong>EVENTO:</strong> {form.evento}</p>
                 <p className="border-b pb-2 mb-2 uppercase"><strong>LOCAL:</strong> {form.local}</p>
                 <div className="mt-4 font-bold text-gray-400">ITENS RECOLHIDOS:</div>
                 <ul className="italic text-gray-400 mb-4 pl-2 space-y-1">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul>
-                {fotoUrl && <img src={fotoUrl} className="w-full rounded-xl mb-4" />}
+                {fotoUrl && <img crossOrigin="anonymous" src={fotoUrl} className="w-full rounded-xl mb-4" />}
                 <p className="border-t pt-4"><strong>RESPONSÁVEL:</strong> {form.responsavel}</p>
             </div>
           </div>
