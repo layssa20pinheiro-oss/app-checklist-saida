@@ -16,9 +16,11 @@ export default function ChecklistPage() {
 
   const [etapa, setEtapa] = useState('form');
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState(false); // Garantindo que o estado existe
   const [itens, setItens] = useState([]);
   const [novoItem, setNovoItem] = useState('');
+  const [fotoUrl, setFotoUrl] = useState(''); // Garantindo que o estado existe
+  const [finalReportId, setFinalReportId] = useState('');
   
   const [form, setForm] = useState({ 
     evento: '', 
@@ -29,8 +31,6 @@ export default function ChecklistPage() {
     observacoes: ''
   });
   
-  const [fotoUrl, setFotoUrl] = useState('');
-  const [finalReportId, setFinalReportId] = useState('');
   const areaCapturaRef = useRef();
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export default function ChecklistPage() {
         }
       });
     } else if (id) {
-        supabase.from('eventos').select('*').eq('id', id).single().then(({ data }) => {
+        supabase.from('eventos').select('nome').eq('id', id).single().then(({ data }) => {
             if (data) setForm(prev => ({ ...prev, evento: data.nome }));
         });
     }
@@ -60,177 +60,130 @@ export default function ChecklistPage() {
     const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `pertences/${fileName}`;
-    const { error: uploadError } = await supabase.storage.from('fotos').upload(filePath, file);
-    if (!uploadError) {
-      const { data } = supabase.storage.from('fotos').getPublicUrl(filePath);
-      setFotoUrl(data.publicUrl);
-    } else {
-      alert("Erro ao enviar foto: " + uploadError.message);
-    }
+    try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `pertences/${fileName}`;
+        const { error: uploadError } = await supabase.storage.from('fotos').upload(filePath, file);
+        if (!uploadError) {
+          const { data } = supabase.storage.from('fotos').getPublicUrl(filePath);
+          setFotoUrl(data.publicUrl);
+        }
+    } catch (err) { console.error(err); }
     setUploading(false);
   };
 
   const salvarETerminar = async () => {
     setLoading(true);
     try {
-      // Aqui está a sua correção do CORS para o Print funcionar!
-      const canvas = await html2canvas(areaCapturaRef.current, { 
-          scale: 2, 
-          backgroundColor: "#7e7f7f",
-          useCORS: true 
-      });
-      
-      const imagemBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-      const nomeImg = `rel_${Date.now()}.png`;
-      
-      const { error: uploadError } = await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
-      if (uploadError) {
-          alert("Erro ao salvar a imagem no banco: " + uploadError.message);
-          setLoading(false);
-          return;
-      }
-
-      const urlImg = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
-
-      const dados = { ...form, itens, pdf_url: urlImg, foto_url: fotoUrl, evento_id: id };
+      // 1. SALVAR DADOS PRIMEIRO (Para garantir que você não perca nada)
+      const dadosParaSalvar = { 
+          ...form, 
+          itens, 
+          foto_url: fotoUrl,
+          evento_id: id 
+      };
       
       let res;
       if (reportId) { 
-          res = await supabase.from('checklists').update(dados).eq('id', reportId).select(); 
+          res = await supabase.from('checklists').update(dadosParaSalvar).eq('id', reportId).select(); 
       } else { 
-          res = await supabase.from('checklists').insert([dados]).select(); 
+          res = await supabase.from('checklists').insert([dadosParaSalvar]).select(); 
       }
 
-      if (res.error) {
-          alert("Erro ao salvar relatório: " + res.error.message);
-      } else if (res.data) {
-          setFinalReportId(res.data[0].id);
-          setEtapa('sucesso');
+      if (res.error) throw new Error(res.error.message);
+      const savedId = res.data[0].id;
+      setFinalReportId(savedId);
+
+      // 2. TENTAR GERAR O PRINT (Se falhar, ele pula para o sucesso do mesmo jeito)
+      try {
+        const canvas = await html2canvas(areaCapturaRef.current, { 
+            scale: 2, 
+            backgroundColor: "#7e7f7f",
+            useCORS: true,
+            logging: false
+        });
+        const imagemBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+        const nomeImg = `rel_${Date.now()}.png`;
+        await supabase.storage.from('fotos').upload(nomeImg, imagemBlob);
+        const urlImg = supabase.storage.from('fotos').getPublicUrl(nomeImg).data.publicUrl;
+        await supabase.from('checklists').update({ pdf_url: urlImg }).eq('id', savedId);
+      } catch (imgErr) {
+        console.log("Erro no print, mas os dados foram salvos.");
       }
+
+      setEtapa('sucesso');
     } catch (e) { 
-        alert("Ocorreu um erro no sistema: " + e.message); 
+        alert("Erro ao salvar: " + e.message); 
     }
-    
-    // Trava de segurança para parar de girar
     setLoading(false);
   };
 
   const enviarWhatsApp = () => {
     const linkApp = `${window.location.origin}/?id=${finalReportId}`;
     const texto = `Olá! Finalizamos a organização dos seus pertences. Tudo foi recolhido com muito cuidado por nossa equipe.\n\n✨ *Seu Relatório Digital:* ${linkApp}\n\nFoi um prazer fazer parte desse sonho.`;
-    
-    // Aqui está a sua correção do WhatsApp!
-    const urlWhats = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
-    window.open(urlWhats, '_blank');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, '_blank');
   };
 
   return (
     <div className="min-h-screen bg-[#7e7f7f] p-4 flex flex-col items-center font-sans">
       
       {etapa === 'form' && (
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md animate-in fade-in">
           <Link href={`/menu-evento?id=${id}`} className="text-white/50 mb-4 flex items-center gap-2 text-xs uppercase font-bold tracking-widest"><ArrowLeft size={16}/> Voltar</Link>
-          
-          <div className="flex flex-col items-center w-full mb-6 relative">
-            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="h-16 opacity-90 mb-4" alt="Logo Cerimonial" />
+          <div className="flex flex-col items-center w-full mb-6 text-center">
+            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="h-16 mb-4" />
             <div className="w-full flex justify-end pr-2">
-               <Link href={`/historico?id=${id}`} className="flex items-center gap-1 text-white/80 hover:text-white text-[9px] font-bold uppercase tracking-widest transition-all">
-                 VER GERENCIAMENTO <ExternalLink size={12}/>
-               </Link>
+               <Link href={`/historico?id=${id}`} className="text-white/80 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">VER GERENCIAMENTO <ExternalLink size={12}/></Link>
             </div>
           </div>
-
-          <div className="bg-white rounded-[30px] p-8 shadow-xl relative">
-            <h2 className="text-center font-bold text-gray-500 mb-8 uppercase text-sm tracking-widest mt-2">
-                {reportId ? "Editar Relatório" : "Novo Checklist"}
-            </h2>
-            
+          <div className="bg-white rounded-[30px] p-8 shadow-xl">
+            <h2 className="text-center font-bold text-gray-500 mb-8 uppercase text-xs tracking-widest">Novo Checklist</h2>
             <div className="space-y-5">
-              <input className="w-full border-b border-gray-200 p-2 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
-              <input className="w-full border-b border-gray-200 p-2 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
-              
+              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Evento" value={form.evento} onChange={e=>setForm({...form, evento: e.target.value})} />
+              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Local" value={form.local} onChange={e=>setForm({...form, local: e.target.value})} />
               <div className="flex gap-4">
-                  <input className="w-full border-b border-gray-200 p-2 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Presentes" value={form.presentes} onChange={e=>setForm({...form, presentes: e.target.value})} />
-                  <input className="w-full border-b border-gray-200 p-2 outline-none text-sm text-gray-600 placeholder:text-gray-400" placeholder="Convidados" value={form.convidados} onChange={e=>setForm({...form, convidados: e.target.value})} />
+                  <input className="w-full border-b p-2 outline-none text-sm" placeholder="Presentes" value={form.presentes} onChange={e=>setForm({...form, presentes: e.target.value})} />
+                  <input className="w-full border-b p-2 outline-none text-sm" placeholder="Convidados" value={form.convidados} onChange={e=>setForm({...form, convidados: e.target.value})} />
               </div>
-
               <div className="pt-2">
-                <div className="flex items-center gap-2">
-                  <input className="flex-1 border border-gray-200 bg-gray-50/50 focus-within:border-[#ded0b8] transition-colors rounded-xl px-3 py-2 text-xs outline-none" placeholder="Adicionar Item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setNovoItem(novoItem.trim() ? (setItens([...itens, novoItem.trim()]), '') : novoItem)} />
-                  <button onClick={() => { if(novoItem.trim()){ setItens([...itens, novoItem.trim()]); setNovoItem(''); } }} className="bg-[#ded0b8] p-2.5 rounded-xl text-white shadow-sm"><Plus size={16}/></button>
+                <div className="flex gap-2">
+                  <input className="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-xs outline-none" placeholder="Adicionar Item..." value={novoItem} onChange={e=>setNovoItem(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (setItens([...itens, novoItem]), setNovoItem(''))} />
+                  <button onClick={() => { if(novoItem){ setItens([...itens, novoItem]); setNovoItem(''); } }} className="bg-[#ded0b8] p-2 rounded-xl text-white"><Plus size={16}/></button>
                 </div>
-                {itens.length > 0 && (
-                    <ul className="text-xs space-y-1 mt-3">
-                    {itens.map((it, i) => <li key={i} className="bg-gray-50 p-3 rounded-xl flex justify-between items-center italic text-gray-500 border border-gray-100">• {it} <Trash2 size={14} onClick={()=>setItens(itens.filter((_,idx)=>idx!==i))} className="text-gray-300 hover:text-red-300"/></li>)}
-                    </ul>
-                )}
+                <ul className="text-xs space-y-1 mt-3">
+                  {itens.map((it, i) => <li key={i} className="bg-gray-50 p-3 rounded-xl flex justify-between items-center italic text-gray-400">• {it} <Trash2 size={14} onClick={()=>setItens(itens.filter((_,idx)=>idx!==i))} className="text-red-200"/></li>)}
+                </ul>
               </div>
-
-              <div className="pt-2">
-                  <textarea className="w-full border border-gray-200 rounded-2xl p-4 outline-none text-sm text-gray-600 placeholder:text-gray-400 min-h-[80px] resize-none focus:border-[#ded0b8] transition-colors" placeholder="Observações..." value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})}></textarea>
-              </div>
-
-              <input className="w-full border-b border-gray-200 p-2 outline-none text-sm text-gray-600 placeholder:text-gray-400 mt-2" placeholder="Sua Assinatura" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
-              
-              <div className="pt-2 pb-2">
-                <label className="relative flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-200 rounded-[20px] cursor-pointer hover:bg-gray-50 transition-colors overflow-hidden group">
-                    {uploading ? (
-                    <div className="flex flex-col items-center text-gray-400 gap-2"><Loader2 className="animate-spin" size={20}/><span className="text-[9px] uppercase font-bold tracking-widest">Enviando...</span></div>
-                    ) : fotoUrl ? (
-                    <img src={fotoUrl} className="w-full h-full object-cover opacity-90" />
-                    ) : (
-                    <div className="flex flex-col items-center text-gray-300 group-hover:text-[#ded0b8] transition-colors gap-2">
-                        <Camera size={24} />
-                        <span className="text-[9px] uppercase font-bold tracking-widest">Foto dos Pertences</span>
-                    </div>
-                    )}
-                    <input type="file" className="hidden" accept="image/*" onChange={handleFotoUpload} />
-                </label>
-              </div>
-
-              <button onClick={() => setEtapa('resumo')} disabled={uploading} className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl mt-4 uppercase text-xs tracking-widest shadow-lg active:scale-95 transition-all">Visualizar Esboço</button>
+              <textarea className="w-full border rounded-2xl p-4 text-sm min-h-[80px]" placeholder="Observações..." value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})}></textarea>
+              <input className="w-full border-b p-2 outline-none text-sm" placeholder="Sua Assinatura" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
+              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-2xl cursor-pointer overflow-hidden">
+                {uploading ? <Loader2 className="animate-spin"/> : fotoUrl ? <img src={fotoUrl} className="h-full w-full object-cover"/> : <div className="text-gray-300 flex flex-col items-center"><Camera size={24}/><span className="text-[9px] uppercase font-bold tracking-widest">Foto dos Pertences</span></div>}
+                <input type="file" className="hidden" accept="image/*" onChange={handleFotoUpload} />
+              </label>
+              <button onClick={() => setEtapa('resumo')} className="w-full bg-[#ded0b8] text-white font-bold py-4 rounded-2xl mt-4 uppercase text-xs tracking-widest">Visualizar Esboço</button>
             </div>
           </div>
         </div>
       )}
 
       {etapa === 'resumo' && (
-        <div className="w-full flex flex-col items-center pb-24">
+        <div className="w-full flex flex-col items-center pb-24 animate-in fade-in">
           <div ref={areaCapturaRef} className="w-[380px] bg-[#7e7f7f] p-6 flex flex-col items-center">
             <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[120px] mb-6" />
             <div className="w-full bg-white rounded-[25px] p-8 text-gray-700 text-xs shadow-sm">
                 <h2 className="text-center font-bold text-lg mb-6 uppercase tracking-[5px] text-[#7e7f7f]">Relatório</h2>
                 <p className="border-b pb-2 mb-2 uppercase"><strong>EVENTO:</strong> {form.evento}</p>
                 <p className="border-b pb-2 mb-2 uppercase"><strong>LOCAL:</strong> {form.local}</p>
-                {(form.presentes || form.convidados) && (
-                    <div className="border-b pb-2 mb-2 flex gap-4 uppercase">
-                        {form.presentes && <p><strong>PRESENTES:</strong> {form.presentes}</p>}
-                        {form.convidados && <p><strong>CONVIDADOS:</strong> {form.convidados}</p>}
-                    </div>
-                )}
-                <div className="mt-4 font-bold uppercase text-[10px] text-gray-400">ITENS RECOLHIDOS:</div>
-                <ul className="italic text-gray-500 mb-4 pl-2 space-y-1 mt-2">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul>
-                {form.observacoes && (
-                    <div className="border-t pt-3 mb-4">
-                        <span className="font-bold uppercase text-[10px] text-gray-400 block mb-1">OBSERVAÇÕES:</span>
-                        <p className="italic text-gray-500">{form.observacoes}</p>
-                    </div>
-                )}
-                {fotoUrl && (
-                    <div className="border-t pt-4 mb-4">
-                        <span className="font-bold uppercase text-[10px] text-gray-400 block mb-2">FOTO REGISTRADA:</span>
-                        <img src={fotoUrl} className="w-full rounded-xl" />
-                    </div>
-                )}
-                <p className="border-t pt-4 uppercase text-gray-600"><strong>RESPONSÁVEL:</strong> {form.responsavel}</p>
+                <div className="mt-4 font-bold text-gray-400">ITENS RECOLHIDOS:</div>
+                <ul className="italic text-gray-400 mb-4 pl-2 space-y-1">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul>
+                {fotoUrl && <img src={fotoUrl} className="w-full rounded-xl mb-4" />}
+                <p className="border-t pt-4"><strong>RESPONSÁVEL:</strong> {form.responsavel}</p>
             </div>
           </div>
-          <div className="fixed bottom-0 bg-white p-4 flex gap-2 w-full max-w-md rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
-            <button onClick={() => setEtapa('form')} className="flex-1 bg-gray-100 py-4 rounded-2xl text-xs font-bold uppercase text-gray-500 hover:bg-gray-200 transition-colors">Ajustar</button>
-            <button onClick={salvarETerminar} className="flex-2 bg-[#8da38d] text-white py-4 px-8 rounded-2xl text-xs font-bold uppercase shadow-lg active:scale-95 transition-all flex justify-center items-center">
+          <div className="fixed bottom-0 bg-white p-4 flex gap-2 w-full max-w-md rounded-t-3xl shadow-2xl">
+            <button onClick={() => setEtapa('form')} className="flex-1 bg-gray-50 py-4 rounded-2xl text-xs font-bold uppercase text-gray-400">Ajustar</button>
+            <button onClick={salvarETerminar} className="flex-2 bg-[#8da38d] text-white py-4 px-8 rounded-2xl text-xs font-bold uppercase shadow-lg flex justify-center items-center">
                 {loading ? <Loader2 className="animate-spin"/> : "Confirmar e Enviar"}
             </button>
           </div>
@@ -238,13 +191,13 @@ export default function ChecklistPage() {
       )}
 
       {etapa === 'sucesso' && (
-        <div className="bg-white rounded-[40px] p-10 text-center shadow-2xl max-w-xs mt-20 animate-in zoom-in duration-300">
+        <div className="bg-white rounded-[40px] p-10 text-center shadow-2xl max-w-xs mt-20">
           <div className="text-5xl mb-4">✨</div>
-          <h2 className="text-gray-500 font-bold uppercase text-sm tracking-widest mb-10">Relatório Criado!</h2>
-          <button onClick={enviarWhatsApp} className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-bold text-xs uppercase flex items-center justify-center gap-2 mb-4 shadow-lg hover:bg-[#20b858] transition-colors">
+          <h2 className="text-gray-500 font-bold uppercase text-sm mb-10">Relatório Criado!</h2>
+          <button onClick={enviarWhatsApp} className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-bold text-xs uppercase flex items-center justify-center gap-2 mb-4 shadow-lg">
             <Send size={16}/> Enviar no WhatsApp
           </button>
-          <button onClick={() => router.push(`/menu-evento?id=${id}`)} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase tracking-widest hover:text-gray-600 transition-colors">Voltar ao Menu</button>
+          <button onClick={() => router.push(`/menu-evento?id=${id}`)} className="w-full text-gray-400 py-4 text-[10px] font-bold uppercase">Voltar ao Menu</button>
         </div>
       )}
     </div>
