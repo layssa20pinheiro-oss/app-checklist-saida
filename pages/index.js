@@ -123,7 +123,7 @@ export default function ChecklistApp() {
       </Head>
 
       {etapa === 'form' && (
-         <img crossOrigin="anonymous" src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mb-10 mt-6" alt="Logo Cerimonial" />
+         <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[140px] mb-10 mt-6" alt="Logo Cerimonial" />
       )}
 
       {etapa === 'form' && (
@@ -151,7 +151,7 @@ export default function ChecklistApp() {
               <input className="w-full border-b p-2 outline-none text-sm font-bold" placeholder="Sua Assinatura" value={form.responsavel} onChange={e=>setForm({...form, responsavel: e.target.value})} />
               
               <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-2xl cursor-pointer overflow-hidden mt-4">
-                {uploading ? <Loader2 className="animate-spin text-gray-400"/> : fotoUrl ? <img crossOrigin="anonymous" src={fotoUrl} className="h-full w-full object-cover"/> : <div className="text-gray-300 flex flex-col items-center"><Camera size={24}/><span className="text-[9px] uppercase font-bold tracking-widest">Foto dos Pertences</span></div>}
+                {uploading ? <Loader2 className="animate-spin text-gray-400"/> : fotoUrl ? <img src={fotoUrl} className="h-full w-full object-cover"/> : <div className="text-gray-300 flex flex-col items-center"><Camera size={24}/><span className="text-[9px] uppercase font-bold tracking-widest">Foto dos Pertences</span></div>}
                 <input type="file" className="hidden" accept="image/*" onChange={handleFotoUpload} />
               </label>
 
@@ -164,7 +164,7 @@ export default function ChecklistApp() {
       {etapa === 'resumo' && (
         <div className="w-full flex flex-col items-center pb-24 animate-in fade-in duration-500">
           <div ref={areaCapturaRef} className="w-[380px] bg-[#7e7f7f] p-8 flex flex-col items-center">
-            <img crossOrigin="anonymous" src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[130px] mb-8" alt="Logo" />
+            <img src="https://rticfwqptlxkpgawpzwf.supabase.co/storage/v1/object/public/fotos/logo.png" className="max-w-[130px] mb-8" alt="Logo" />
             <div className="w-full bg-white rounded-[30px] p-10 text-gray-700 text-xs shadow-sm leading-relaxed">
                 <h2 className="text-center font-bold text-lg mb-8 uppercase tracking-[8px] text-[#7e7f7f] border-b pb-4">Relatório</h2>
                 <div className="space-y-4">
@@ -173,7 +173,7 @@ export default function ChecklistApp() {
                     <div className="border-t pt-3 flex justify-between"><p><strong>PRESENTES:</strong> {form.presentes || '-'}</p><p><strong>CONVIDADOS:</strong> {form.convidados || '-'}</p></div>
                     <div className="border-t pt-3 font-bold">ITENS RECOLHIDOS:<ul className="mt-2 italic text-gray-400 pl-2 space-y-1">{itens.map((it, i) => <li key={i}>• {it}</li>)}</ul></div>
                     <p className="border-t pt-3"><strong>OBS:</strong> <span className="italic">{form.observacoes || 'Nenhuma.'}</span></p>
-                    {fotoUrl && <img crossOrigin="anonymous" src={fotoUrl} className="w-full rounded-xl mt-4" />}
+                    {fotoUrl && <img src={fotoUrl} className="w-full rounded-xl mt-4" />}
                     <p className="border-t pt-6 italic mt-4"><strong>ASSINATURA:</strong> <span className="uppercase">{form.responsavel}</span></p>
                 </div>
             </div>
@@ -206,7 +206,7 @@ export default function ChecklistApp() {
                  <div className="border-t pt-4 font-bold uppercase text-[10px] text-gray-400">Itens Recolhidos:</div>
                  <ul className="space-y-1 italic text-gray-500">{itens?.map((it, i) => <li key={i}>• {it}</li>)}</ul>
                  <p className="border-t pt-4 italic"><strong>RESPONSÁVEL:</strong> {form.responsavel}</p>
-                 {fotoUrl && <img crossOrigin="anonymous" src={fotoUrl} className="mt-4 rounded-xl w-full border" />}
+                 {fotoUrl && <img src={fotoUrl} className="mt-4 rounded-xl w-full border" />}
               </div>
            </div>
            <button onClick={() => window.location.href='/'} className="mt-10 bg-white/10 text-white px-10 py-4 rounded-2xl text-[10px] uppercase font-bold border border-white/20 tracking-widest hover:bg-white/20">Acessar Meu Painel</button>
